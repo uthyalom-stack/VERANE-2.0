@@ -15,6 +15,13 @@
       "when": 1790856643273,
       "tag": "0001_nasty_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1790874351299,
+      "tag": "0002_nosy_runaways",
+      "breakpoints": true
     }
   ]
 }
