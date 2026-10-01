@@ -52,6 +52,8 @@ export const CreateProductSchema = z.object({
   shortDescription: z.string().optional(),
   fullDescription: z.string().optional(),
   status: ProductStatusEnum.default("DRAFT").optional(),
+  basePriceCents: z.number().int().nonnegative().default(0).optional(),
+  currency: z.string().default("NGN").optional(),
   materials: z.string().optional(),
   careInfo: z.string().optional(),
   fitInfo: z.string().optional(),

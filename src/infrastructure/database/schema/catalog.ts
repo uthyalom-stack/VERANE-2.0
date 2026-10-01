@@ -16,6 +16,8 @@ export const products = sqliteTable(
     status: text("status", { enum: ["DRAFT", "ACTIVE", "ARCHIVED"] })
       .notNull()
       .default("DRAFT"),
+    basePriceCents: integer("base_price_cents").notNull().default(0), // Authoritative base price in minor units (kobo/cents)
+    currency: text("currency").notNull().default("NGN"),
     materials: text("materials"),
     careInfo: text("care_info"),
     fitInfo: text("fit_info"),

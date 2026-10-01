@@ -56,15 +56,21 @@ export class CatalogRepository {
   }
 
   async listProducts(filters?: {
-    brandId?: string;
+    brandId?: string | string[];
     status?: "DRAFT" | "ACTIVE" | "ARCHIVED";
     categoryId?: string;
   }): Promise<Product[]> {
     const conditions = [];
 
     if (filters?.brandId) {
-      conditions.push(eq(products.brandId, filters.brandId));
+      if (Array.isArray(filters.brandId)) {
+        if (filters.brandId.length === 0) return [];
+        conditions.push(inArray(products.brandId, filters.brandId));
+      } else {
+        conditions.push(eq(products.brandId, filters.brandId));
+      }
     }
+
     if (filters?.status) {
       conditions.push(eq(products.status, filters.status));
     }
@@ -201,12 +207,18 @@ export class CatalogRepository {
     return cat || null;
   }
 
-  async listCategories(filters?: { brandId?: string; parentId?: string | null }): Promise<Category[]> {
+  async listCategories(filters?: { brandId?: string | string[]; parentId?: string | null }): Promise<Category[]> {
     const conditions = [];
 
     if (filters?.brandId) {
-      conditions.push(eq(categories.brandId, filters.brandId));
+      if (Array.isArray(filters.brandId)) {
+        if (filters.brandId.length === 0) return [];
+        conditions.push(inArray(categories.brandId, filters.brandId));
+      } else {
+        conditions.push(eq(categories.brandId, filters.brandId));
+      }
     }
+
     if (filters?.parentId !== undefined) {
       if (filters.parentId === null) {
         conditions.push(sql`${categories.parentId} IS NULL`);
@@ -268,12 +280,18 @@ export class CatalogRepository {
     return coll || null;
   }
 
-  async listCollections(filters?: { brandId?: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" }): Promise<Collection[]> {
+  async listCollections(filters?: { brandId?: string | string[]; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" }): Promise<Collection[]> {
     const conditions = [];
 
     if (filters?.brandId) {
-      conditions.push(eq(collections.brandId, filters.brandId));
+      if (Array.isArray(filters.brandId)) {
+        if (filters.brandId.length === 0) return [];
+        conditions.push(inArray(collections.brandId, filters.brandId));
+      } else {
+        conditions.push(eq(collections.brandId, filters.brandId));
+      }
     }
+
     if (filters?.status) {
       conditions.push(eq(collections.status, filters.status));
     }
@@ -365,69 +383,87 @@ export class CatalogRepository {
     reason?: string,
     actorUserId?: string
   ): Promise<Inventory> {
-    const currentInv = await this.getVariantInventory(variantId);
-    const previousQuantity = currentInv ? currentInv.quantity : 0;
-    const reservedQuantity = currentInv ? currentInv.reservedQuantity : 0;
+    return this.db.transaction(async (tx) => {
+      const [currentInv] = await tx.select().from(inventory).where(eq(inventory.variantId, variantId));
+      const previousQuantity = currentInv ? currentInv.quantity : 0;
+      const reservedQuantity = currentInv ? currentInv.reservedQuantity : 0;
 
-    let newQuantity = previousQuantity;
-    let newReserved = reservedQuantity;
+      let newQuantity = previousQuantity;
+      let newReserved = reservedQuantity;
 
-    if (type === "RESERVATION") {
-      newReserved = reservedQuantity + quantityChange;
-    } else if (type === "RELEASE") {
-      newReserved = Math.max(0, reservedQuantity - quantityChange);
-    } else {
-      newQuantity = previousQuantity + quantityChange;
-    }
+      if (type === "RESERVATION") {
+        if (quantityChange <= 0) {
+          throw new Error("Reservation quantity change must be positive");
+        }
+        const available = previousQuantity - reservedQuantity;
+        if (quantityChange > available) {
+          throw new Error("Insufficient available inventory for reservation");
+        }
+        newReserved = reservedQuantity + quantityChange;
+      } else if (type === "RELEASE") {
+        if (quantityChange <= 0) {
+          throw new Error("Release quantity change must be positive");
+        }
+        if (quantityChange > reservedQuantity) {
+          throw new Error("Invalid release quantity: exceeds reserved quantity");
+        }
+        newReserved = reservedQuantity - quantityChange;
+      } else {
+        newQuantity = previousQuantity + quantityChange;
+      }
 
-    if (newQuantity < 0) {
-      throw new Error("Inventory quantity cannot be negative");
-    }
-    if (newQuantity - newReserved < 0) {
-      throw new Error("Available inventory (quantity - reservedQuantity) cannot be negative");
-    }
+      if (newQuantity < 0) {
+        throw new Error("Inventory quantity cannot be negative");
+      }
+      if (newReserved < 0) {
+        throw new Error("Reserved quantity cannot be negative");
+      }
+      if (newReserved > newQuantity) {
+        throw new Error("Reserved quantity cannot exceed total quantity");
+      }
 
-    let updatedInv: Inventory;
-    if (!currentInv) {
-      const [inserted] = await this.db
-        .insert(inventory)
-        .values({
-          id: `inv_${variantId}`,
-          variantId,
-          quantity: newQuantity,
-          reservedQuantity: newReserved,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
-      updatedInv = inserted;
-    } else {
-      const [updated] = await this.db
-        .update(inventory)
-        .set({
-          quantity: newQuantity,
-          reservedQuantity: newReserved,
-          updatedAt: new Date(),
-        })
-        .where(eq(inventory.variantId, variantId))
-        .returning();
-      updatedInv = updated;
-    }
+      let updatedInv: Inventory;
+      if (!currentInv) {
+        const [inserted] = await tx
+          .insert(inventory)
+          .values({
+            id: `inv_${variantId}`,
+            variantId,
+            quantity: newQuantity,
+            reservedQuantity: newReserved,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          })
+          .returning();
+        updatedInv = inserted;
+      } else {
+        const [updated] = await tx
+          .update(inventory)
+          .set({
+            quantity: newQuantity,
+            reservedQuantity: newReserved,
+            updatedAt: new Date(),
+          })
+          .where(eq(inventory.variantId, variantId))
+          .returning();
+        updatedInv = updated;
+      }
 
-    // Record inventory transaction
-    await this.db.insert(inventoryTransactions).values({
-      id: `invtx_${crypto.randomUUID()}`,
-      variantId,
-      type,
-      quantityChange,
-      previousQuantity,
-      newQuantity,
-      reason,
-      actorUserId,
-      createdAt: new Date(),
+      // Record inventory transaction
+      await tx.insert(inventoryTransactions).values({
+        id: `invtx_${crypto.randomUUID()}`,
+        variantId,
+        type,
+        quantityChange,
+        previousQuantity,
+        newQuantity,
+        reason,
+        actorUserId,
+        createdAt: new Date(),
+      });
+
+      return updatedInv;
     });
-
-    return updatedInv;
   }
 
   async listInventoryTransactions(variantId: string): Promise<InventoryTransaction[]> {

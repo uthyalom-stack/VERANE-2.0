@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { getCurrentUser } from "@/lib/auth/auth-helpers";
 import { logoutAction } from "@/app/actions/auth";
 import { db } from "@/infrastructure/database/client";
@@ -28,7 +29,7 @@ export default async function AdminPage() {
 
   const productsList = await catalogService.listProducts(authUser);
   const categoriesList = await catalogService.listCategories(authUser);
-  const collectionsList = await catalogRepo.listCollections();
+  const collectionsList = await catalogService.listCollections(authUser);
 
   return (
     <div className="max-w-4xl mx-auto my-12 p-6 border rounded shadow-sm bg-white text-gray-900">
@@ -61,28 +62,35 @@ export default async function AdminPage() {
         </ul>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="p-4 border rounded bg-gray-50">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+        <Link href="/admin/products" className="p-4 border rounded bg-gray-50 hover:bg-gray-100 transition">
           <h3 className="font-bold text-lg mb-1">Products ({productsList.length})</h3>
-          <p className="text-sm text-gray-600 mb-3">Manage catalog items, variants, prices & media.</p>
-          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded">
-            Products Active
+          <p className="text-xs text-gray-600 mb-3">Manage catalog items, variants & media.</p>
+          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded inline-block">
+            View Products →
           </span>
-        </div>
-        <div className="p-4 border rounded bg-gray-50">
+        </Link>
+        <Link href="/admin/categories" className="p-4 border rounded bg-gray-50 hover:bg-gray-100 transition">
           <h3 className="font-bold text-lg mb-1">Categories ({categoriesList.length})</h3>
-          <p className="text-sm text-gray-600 mb-3">Hierarchical navigation and taxonomy.</p>
-          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded">
-            Categories Active
+          <p className="text-xs text-gray-600 mb-3">Taxonomy & category hierarchy.</p>
+          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded inline-block">
+            View Categories →
           </span>
-        </div>
-        <div className="p-4 border rounded bg-gray-50">
+        </Link>
+        <Link href="/admin/collections" className="p-4 border rounded bg-gray-50 hover:bg-gray-100 transition">
           <h3 className="font-bold text-lg mb-1">Collections ({collectionsList.length})</h3>
-          <p className="text-sm text-gray-600 mb-3">Editorial rails, campaigns and ordered drops.</p>
-          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded">
-            Collections Active
+          <p className="text-xs text-gray-600 mb-3">Editorial rails & ordered drops.</p>
+          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded inline-block">
+            View Collections →
           </span>
-        </div>
+        </Link>
+        <Link href="/admin/inventory" className="p-4 border rounded bg-gray-50 hover:bg-gray-100 transition">
+          <h3 className="font-bold text-lg mb-1">Inventory</h3>
+          <p className="text-xs text-gray-600 mb-3">Auditable stock adjustments & txs.</p>
+          <span className="text-xs font-semibold px-2 py-1 bg-black text-white rounded inline-block">
+            View Inventory →
+          </span>
+        </Link>
       </div>
     </div>
   );

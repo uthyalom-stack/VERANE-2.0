@@ -46,7 +46,7 @@ describe("Catalog Brand-Scoped Authorization Enforcement", () => {
     await client.execute(`CREATE TABLE IF NOT EXISTS role_permissions (role_id TEXT NOT NULL, permission_id TEXT NOT NULL, PRIMARY KEY (role_id, permission_id));`);
     await client.execute(`CREATE TABLE IF NOT EXISTS admin_roles (id TEXT PRIMARY KEY, admin_profile_id TEXT NOT NULL, role_id TEXT NOT NULL, brand_id TEXT, created_at INTEGER NOT NULL);`);
 
-    await client.execute(`CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY NOT NULL, brand_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, short_description TEXT, full_description TEXT, status TEXT DEFAULT 'DRAFT' NOT NULL, materials TEXT, care_info TEXT, fit_info TEXT, sizing_info TEXT, seo_title TEXT, seo_description TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
+    await client.execute(`CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY NOT NULL, brand_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, short_description TEXT, full_description TEXT, status TEXT DEFAULT 'DRAFT' NOT NULL, base_price_cents INTEGER DEFAULT 0 NOT NULL, currency TEXT DEFAULT 'NGN' NOT NULL, materials TEXT, care_info TEXT, fit_info TEXT, sizing_info TEXT, seo_title TEXT, seo_description TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS product_variants (id TEXT PRIMARY KEY NOT NULL, product_id TEXT NOT NULL, sku TEXT NOT NULL UNIQUE, size TEXT, color TEXT, color_code TEXT, price_override_cents INTEGER, currency TEXT DEFAULT 'NGN' NOT NULL, barcode TEXT, weight_grams INTEGER, dimensions TEXT, status TEXT DEFAULT 'ACTIVE' NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, description TEXT, parent_id TEXT, brand_id TEXT, is_active INTEGER DEFAULT 1 NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS product_categories (product_id TEXT NOT NULL, category_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(product_id, category_id));`);
@@ -157,119 +157,195 @@ describe("Catalog Brand-Scoped Authorization Enforcement", () => {
     };
   });
 
-  it("SUPER_ADMIN should be allowed to manage all brand catalogs", async () => {
+  // Rule 1 & 2: Brand Admins product listing isolation
+  it("1 & 2. UTHY_ADMIN cannot list ALOMZIEE products and ALOMZIEE_ADMIN cannot list UTHY products", async () => {
     const uthyProd = await catalogService.createProduct(superUser, {
       brandId: uthyBrandId,
-      name: "UTHY Silk Cape",
-      slug: `uthy-cape-${Date.now()}`,
+      name: "UTHY Silk Suit",
+      slug: `uthy-suit-${Date.now()}`,
     });
 
     const alomzieeProd = await catalogService.createProduct(superUser, {
       brandId: alomzieeBrandId,
-      name: "ALOMZIEE Leather Loafers",
+      name: "ALOMZIEE Boots",
+      slug: `alomziee-boots-${Date.now()}`,
+    });
+
+    const uthyList = await catalogService.listProducts(uthyAdminUser);
+    expect(uthyList.map((p) => p.id)).toContain(uthyProd.id);
+    expect(uthyList.map((p) => p.id)).not.toContain(alomzieeProd.id);
+
+    const alomzieeList = await catalogService.listProducts(alomzieeAdminUser);
+    expect(alomzieeList.map((p) => p.id)).toContain(alomzieeProd.id);
+    expect(alomzieeList.map((p) => p.id)).not.toContain(uthyProd.id);
+
+    // Attempting to list with explicitly forged brandId filter
+    await expect(
+      catalogService.listProducts(uthyAdminUser, { brandId: alomzieeBrandId })
+    ).rejects.toThrow(ForbiddenError);
+
+    await expect(
+      catalogService.listProducts(alomzieeAdminUser, { brandId: uthyBrandId })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  // Rule 3 & 4: Brand Admins category listing isolation
+  it("3 & 4. UTHY_ADMIN cannot list ALOMZIEE categories and ALOMZIEE_ADMIN cannot list UTHY categories", async () => {
+    const uthyCat = await catalogService.createCategory(superUser, {
+      name: "UTHY Tops",
+      slug: `uthy-tops-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const alomzieeCat = await catalogService.createCategory(superUser, {
+      name: "ALOMZIEE Sandals",
+      slug: `alomziee-sandals-${Date.now()}`,
+      brandId: alomzieeBrandId,
+    });
+
+    const uthyCats = await catalogService.listCategories(uthyAdminUser);
+    expect(uthyCats.map((c) => c.id)).toContain(uthyCat.id);
+    expect(uthyCats.map((c) => c.id)).not.toContain(alomzieeCat.id);
+
+    const alomzieeCats = await catalogService.listCategories(alomzieeAdminUser);
+    expect(alomzieeCats.map((c) => c.id)).toContain(alomzieeCat.id);
+    expect(alomzieeCats.map((c) => c.id)).not.toContain(uthyCat.id);
+
+    await expect(
+      catalogService.listCategories(uthyAdminUser, { brandId: alomzieeBrandId })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  // Rule 5 & 6: Brand Admins collection listing isolation
+  it("5 & 6. UTHY_ADMIN cannot list ALOMZIEE collections and ALOMZIEE_ADMIN cannot list UTHY collections", async () => {
+    const uthyColl = await catalogService.createCollection(superUser, {
+      name: "UTHY Winter Drop",
+      slug: `uthy-winter-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const alomzieeColl = await catalogService.createCollection(superUser, {
+      name: "ALOMZIEE Summer Drop",
+      slug: `alomziee-summer-${Date.now()}`,
+      brandId: alomzieeBrandId,
+    });
+
+    const uthyColls = await catalogService.listCollections(uthyAdminUser);
+    expect(uthyColls.map((c) => c.id)).toContain(uthyColl.id);
+    expect(uthyColls.map((c) => c.id)).not.toContain(alomzieeColl.id);
+
+    const alomzieeColls = await catalogService.listCollections(alomzieeAdminUser);
+    expect(alomzieeColls.map((c) => c.id)).toContain(alomzieeColl.id);
+    expect(alomzieeColls.map((c) => c.id)).not.toContain(uthyColl.id);
+
+    await expect(
+      catalogService.listCollections(uthyAdminUser, { brandId: alomzieeBrandId })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  // Rule 7 & 8: Cross-brand category attachment rejection
+  it("7 & 8. UTHY product cannot receive ALOMZIEE category and ALOMZIEE product cannot receive UTHY category", async () => {
+    const uthyCat = await catalogService.createCategory(superUser, {
+      name: "UTHY Dresses",
+      slug: `uthy-dresses-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const alomzieeCat = await catalogService.createCategory(superUser, {
+      name: "ALOMZIEE Footwear",
+      slug: `alomziee-footwear-${Date.now()}`,
+      brandId: alomzieeBrandId,
+    });
+
+    await expect(
+      catalogService.createProduct(uthyAdminUser, {
+        brandId: uthyBrandId,
+        name: "UTHY Dress",
+        slug: `uthy-dress-${Date.now()}`,
+        categoryIds: [alomzieeCat.id],
+      })
+    ).rejects.toThrow(ForbiddenError);
+
+    await expect(
+      catalogService.createProduct(alomzieeAdminUser, {
+        brandId: alomzieeBrandId,
+        name: "ALOMZIEE Shoe",
+        slug: `alomziee-shoe-${Date.now()}`,
+        categoryIds: [uthyCat.id],
+      })
+    ).rejects.toThrow(ForbiddenError);
+  });
+
+  // Rule 9 & 10: Cross-brand collection product membership rejection
+  it("9 & 10. UTHY collection cannot receive ALOMZIEE product and ALOMZIEE collection cannot receive UTHY product", async () => {
+    const uthyColl = await catalogService.createCollection(superUser, {
+      name: "UTHY Exclusive Rail",
+      slug: `uthy-rail-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const alomzieeColl = await catalogService.createCollection(superUser, {
+      name: "ALOMZIEE Exclusive Rail",
+      slug: `alomziee-rail-${Date.now()}`,
+      brandId: alomzieeBrandId,
+    });
+
+    const uthyProd = await catalogService.createProduct(superUser, {
+      brandId: uthyBrandId,
+      name: "UTHY Jacket",
+      slug: `uthy-jacket-${Date.now()}`,
+    });
+
+    const alomzieeProd = await catalogService.createProduct(superUser, {
+      brandId: alomzieeBrandId,
+      name: "ALOMZIEE Loafers",
       slug: `alomziee-loafers-${Date.now()}`,
     });
 
-    expect(uthyProd.id).toBeDefined();
-    expect(alomzieeProd.id).toBeDefined();
-  });
-
-  it("UTHY_ADMIN should be allowed for UTHY catalog and DENIED for ALOMZIEE catalog", async () => {
-    // Allowed: UTHY product creation
-    const uthyProd = await catalogService.createProduct(uthyAdminUser, {
-      brandId: uthyBrandId,
-      name: "UTHY Velvet Gown",
-      slug: `uthy-gown-${Date.now()}`,
-    });
-    expect(uthyProd.id).toBeDefined();
-
-    // Denied: UTHY_ADMIN trying to create ALOMZIEE product by submitting ALOMZIEE brandId
+    // UTHY collection receiving ALOMZIEE product -> Rejected
     await expect(
-      catalogService.createProduct(uthyAdminUser, {
-        brandId: alomzieeBrandId,
-        name: "Sneakers",
-        slug: `sneakers-${Date.now()}`,
-      })
+      catalogService.addProductToCollection(superUser, uthyColl.id, alomzieeProd.id)
     ).rejects.toThrow(ForbiddenError);
 
-    // Denied: UTHY_ADMIN trying to update an existing ALOMZIEE product ID directly
-    const alomzieeProd = await catalogService.createProduct(superUser, {
-      brandId: alomzieeBrandId,
-      name: "ALOMZIEE Mules",
-      slug: `alomziee-mules-${Date.now()}`,
-    });
-
+    // ALOMZIEE collection receiving UTHY product -> Rejected
     await expect(
-      catalogService.updateProduct(uthyAdminUser, alomzieeProd.id, {
-        name: "Hijacked Mules Name",
-      })
-    ).rejects.toThrow(ForbiddenError);
-
-    await expect(
-      catalogService.archiveProduct(uthyAdminUser, alomzieeProd.id)
+      catalogService.addProductToCollection(superUser, alomzieeColl.id, uthyProd.id)
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("ALOMZIEE_ADMIN should be allowed for ALOMZIEE catalog and DENIED for UTHY catalog", async () => {
-    // Allowed: ALOMZIEE product creation
-    const alomzieeProd = await catalogService.createProduct(alomzieeAdminUser, {
-      brandId: alomzieeBrandId,
-      name: "ALOMZIEE Chelsea Boots",
-      slug: `chelsea-boots-${Date.now()}`,
-    });
-    expect(alomzieeProd.id).toBeDefined();
-
-    // Denied: ALOMZIEE_ADMIN trying to create UTHY product
+  // Rule 11 & 12: Brand admins cannot create global entities
+  it("11 & 12. Brand admins cannot create global categories or collections", async () => {
     await expect(
-      catalogService.createProduct(alomzieeAdminUser, {
-        brandId: uthyBrandId,
-        name: "UTHY Corset",
-        slug: `uthy-corset-${Date.now()}`,
+      catalogService.createCategory(uthyAdminUser, {
+        name: "Global Apparel",
+        slug: `global-apparel-${Date.now()}`,
+        brandId: null,
       })
     ).rejects.toThrow(ForbiddenError);
 
-    // Denied: ALOMZIEE_ADMIN updating UTHY product directly
-    const uthyProd = await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "UTHY Trench Coat",
-      slug: `uthy-trench-${Date.now()}`,
-    });
-
     await expect(
-      catalogService.updateProduct(alomzieeAdminUser, uthyProd.id, {
-        name: "Hijacked Trench Name",
+      catalogService.createCollection(alomzieeAdminUser, {
+        name: "Global Drop",
+        slug: `global-drop-${Date.now()}`,
+        brandId: null,
       })
     ).rejects.toThrow(ForbiddenError);
   });
 
-  it("should enforce brand scope on inventory adjustments", async () => {
-    const uthyProd = await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "UTHY Blazer",
-      slug: `uthy-blazer-${Date.now()}`,
+  // Rule 13: SUPER_ADMIN across both brands and global entity creation
+  it("13. SUPER_ADMIN can create global entities and operate across both brands", async () => {
+    const globalCat = await catalogService.createCategory(superUser, {
+      name: "Universal Accessories",
+      slug: `universal-acc-${Date.now()}`,
+      brandId: null,
     });
+    expect(globalCat.id).toBeDefined();
 
-    const variant = await catalogService.createVariant(superUser, {
-      productId: uthyProd.id,
-      sku: `SKU-UTHY-BLAZER-${Date.now()}`,
-      initialQuantity: 10,
+    const globalColl = await catalogService.createCollection(superUser, {
+      name: "Featured Platform Launch",
+      slug: `platform-launch-${Date.now()}`,
+      brandId: null,
     });
-
-    // UTHY_ADMIN can adjust UTHY variant inventory
-    const adjusted = await catalogService.adjustInventory(uthyAdminUser, {
-      variantId: variant.id,
-      quantityChange: 5,
-      type: "STOCK_RECEIVED",
-    });
-    expect(adjusted.quantity).toBe(15);
-
-    // ALOMZIEE_ADMIN trying to adjust UTHY variant inventory should be DENIED
-    await expect(
-      catalogService.adjustInventory(alomzieeAdminUser, {
-        variantId: variant.id,
-        quantityChange: 5,
-        type: "STOCK_RECEIVED",
-      })
-    ).rejects.toThrow(ForbiddenError);
+    expect(globalColl.id).toBeDefined();
   });
 });

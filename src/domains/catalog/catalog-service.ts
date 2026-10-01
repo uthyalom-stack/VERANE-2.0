@@ -15,12 +15,18 @@ import {
   UpdateVariantInput,
   CreateCategorySchema,
   CreateCategoryInput,
+  UpdateCategorySchema,
+  UpdateCategoryInput,
   CreateCollectionSchema,
   CreateCollectionInput,
+  UpdateCollectionSchema,
+  UpdateCollectionInput,
   AdjustInventorySchema,
   AdjustInventoryInput,
   CreateMediaSchema,
   CreateMediaInput,
+  UpdateMediaSchema,
+  UpdateMediaInput,
 } from "./types";
 import { Product, ProductVariant, Category, Collection, Inventory, ProductMedia } from "@/infrastructure/database/schema";
 
@@ -30,6 +36,28 @@ export class CatalogService {
     private authService: AuthorizationService,
     private auditService?: AuditService
   ) {}
+
+  /**
+   * Internal helper to extract assigned brand IDs for an administrator user.
+   * Returns string array of brand IDs, or null if SUPER_ADMIN (unrestricted).
+   */
+  private getAuthorizedBrandIds(userAuth: AuthenticatedUser | null): string[] | null {
+    if (!userAuth || !userAuth.adminProfile) {
+      return null;
+    }
+    if (this.authService.isSuperAdmin(userAuth)) {
+      return null; // Unrestricted
+    }
+
+    const assignedBrandIds: string[] = [];
+    userAuth.adminRoles?.forEach((role) => {
+      if (role.brandId && !assignedBrandIds.includes(role.brandId)) {
+        assignedBrandIds.push(role.brandId);
+      }
+    });
+
+    return assignedBrandIds;
+  }
 
   // ---------------------------------------------------------------------------
   // PRODUCTS
@@ -51,6 +79,19 @@ export class CatalogService {
       throw new ValidationError(`Product slug '${validated.slug}' already exists`);
     }
 
+    // Validate category integrity: each category must belong to product's brand OR be global
+    if (validated.categoryIds && validated.categoryIds.length > 0) {
+      for (const catId of validated.categoryIds) {
+        const cat = await this.catalogRepo.findCategoryById(catId);
+        if (!cat) {
+          throw new NotFoundError(`Category ID '${catId}' not found`);
+        }
+        if (cat.brandId && cat.brandId !== validated.brandId) {
+          throw new ForbiddenError(`Category '${cat.name}' belongs to a different brand`);
+        }
+      }
+    }
+
     const productId = `prod_${crypto.randomUUID()}`;
     const product = await this.catalogRepo.createProduct(
       {
@@ -61,6 +102,8 @@ export class CatalogService {
         shortDescription: validated.shortDescription,
         fullDescription: validated.fullDescription,
         status: validated.status ?? "DRAFT",
+        basePriceCents: validated.basePriceCents ?? 0,
+        currency: validated.currency ?? "NGN",
         materials: validated.materials,
         careInfo: validated.careInfo,
         fitInfo: validated.fitInfo,
@@ -78,7 +121,7 @@ export class CatalogService {
         entityType: "product",
         entityId: product.id,
         brandId: product.brandId,
-        metadata: { name: product.name, slug: product.slug },
+        metadata: { name: product.name, slug: product.slug, basePriceCents: product.basePriceCents },
       });
     }
 
@@ -121,11 +164,16 @@ export class CatalogService {
     userAuth: AuthenticatedUser | null,
     filters?: { brandId?: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED"; categoryId?: string }
   ): Promise<Product[]> {
-    if (filters?.brandId && userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, filters.brandId);
-      if (!hasAccess) {
-        throw new ForbiddenError("Not authorized to list products for this brand");
+    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+
+    if (authorizedBrandIds !== null) {
+      if (filters?.brandId) {
+        if (!authorizedBrandIds.includes(filters.brandId)) {
+          throw new ForbiddenError("Not authorized to list products for this brand");
+        }
+        return this.catalogRepo.listProducts({ ...filters, brandId: filters.brandId });
       }
+      return this.catalogRepo.listProducts({ ...filters, brandId: authorizedBrandIds });
     }
 
     return this.catalogRepo.listProducts(filters);
@@ -152,6 +200,18 @@ export class CatalogService {
       const slugCheck = await this.catalogRepo.findProductBySlug(validated.slug);
       if (slugCheck) {
         throw new ValidationError(`Product slug '${validated.slug}' already exists`);
+      }
+    }
+
+    if (validated.categoryIds && validated.categoryIds.length > 0) {
+      for (const catId of validated.categoryIds) {
+        const cat = await this.catalogRepo.findCategoryById(catId);
+        if (!cat) {
+          throw new NotFoundError(`Category ID '${catId}' not found`);
+        }
+        if (cat.brandId && cat.brandId !== existing.brandId) {
+          throw new ForbiddenError(`Category '${cat.name}' belongs to a different brand`);
+        }
       }
     }
 
@@ -246,6 +306,17 @@ export class CatalogService {
       validated.initialQuantity ?? 0
     );
 
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.variant_create",
+        entityType: "variant",
+        entityId: variant.id,
+        brandId: parentProduct.brandId,
+        metadata: { sku: variant.sku, productId: parentProduct.id },
+      });
+    }
+
     return variant;
   }
 
@@ -294,7 +365,20 @@ export class CatalogService {
       }
     }
 
-    return this.catalogRepo.updateVariant(id, validated);
+    const updated = await this.catalogRepo.updateVariant(id, validated);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.variant_update",
+        entityType: "variant",
+        entityId: updated.id,
+        brandId: parentProduct.brandId,
+        metadata: { updatedFields: Object.keys(input) },
+      });
+    }
+
+    return updated;
   }
 
   async archiveVariant(userAuth: AuthenticatedUser, id: string): Promise<ProductVariant> {
@@ -317,7 +401,19 @@ export class CatalogService {
       throw new ForbiddenError("Not authorized to archive variants for this brand");
     }
 
-    return this.catalogRepo.archiveVariant(id);
+    const archived = await this.catalogRepo.archiveVariant(id);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.variant_archive",
+        entityType: "variant",
+        entityId: archived.id,
+        brandId: parentProduct.brandId,
+      });
+    }
+
+    return archived;
   }
 
   // ---------------------------------------------------------------------------
@@ -326,7 +422,13 @@ export class CatalogService {
   async createCategory(userAuth: AuthenticatedUser, input: CreateCategoryInput): Promise<Category> {
     const validated = CreateCategorySchema.parse(input);
 
-    if (validated.brandId) {
+    const isSuper = this.authService.isSuperAdmin(userAuth);
+
+    if (!validated.brandId) {
+      if (!isSuper) {
+        throw new ForbiddenError("Brand administrators cannot create global categories");
+      }
+    } else {
       const hasPerm = await this.authService.hasBrandPermission(
         userAuth,
         PERMISSIONS.CATEGORIES_CREATE,
@@ -334,11 +436,6 @@ export class CatalogService {
       );
       if (!hasPerm) {
         throw new ForbiddenError("Not authorized to create categories for this brand");
-      }
-    } else {
-      const hasPerm = await this.authService.hasPermission(userAuth, PERMISSIONS.CATEGORIES_CREATE);
-      if (!hasPerm) {
-        throw new ForbiddenError("Not authorized to create global categories");
       }
     }
 
@@ -364,6 +461,17 @@ export class CatalogService {
       isActive: validated.isActive ?? true,
     });
 
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.category_create",
+        entityType: "category",
+        entityId: category.id,
+        brandId: category.brandId,
+        metadata: { name: category.name, slug: category.slug },
+      });
+    }
+
     return category;
   }
 
@@ -371,14 +479,94 @@ export class CatalogService {
     userAuth: AuthenticatedUser | null,
     filters?: { brandId?: string; parentId?: string | null }
   ): Promise<Category[]> {
-    if (filters?.brandId && userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, filters.brandId);
-      if (!hasAccess) {
-        throw new ForbiddenError("Not authorized to view categories for this brand");
+    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+
+    if (authorizedBrandIds !== null) {
+      if (filters?.brandId) {
+        if (!authorizedBrandIds.includes(filters.brandId)) {
+          throw new ForbiddenError("Not authorized to view categories for this brand");
+        }
+        return this.catalogRepo.listCategories({ ...filters, brandId: filters.brandId });
       }
+      return this.catalogRepo.listCategories({ ...filters, brandId: authorizedBrandIds });
     }
 
     return this.catalogRepo.listCategories(filters);
+  }
+
+  async updateCategory(userAuth: AuthenticatedUser, id: string, input: UpdateCategoryInput): Promise<Category> {
+    const validated = UpdateCategorySchema.parse(input);
+
+    const existing = await this.catalogRepo.findCategoryById(id);
+    if (!existing) {
+      throw new NotFoundError("Category not found");
+    }
+
+    if (existing.brandId) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.CATEGORIES_UPDATE,
+        existing.brandId
+      );
+      if (!hasPerm) {
+        throw new ForbiddenError("Not authorized to update this category");
+      }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can update global categories");
+      }
+    }
+
+    const updated = await this.catalogRepo.updateCategory(id, validated);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.category_update",
+        entityType: "category",
+        entityId: updated.id,
+        brandId: updated.brandId,
+        metadata: { updatedFields: Object.keys(input) },
+      });
+    }
+
+    return updated;
+  }
+
+  async archiveCategory(userAuth: AuthenticatedUser, id: string): Promise<Category> {
+    const existing = await this.catalogRepo.findCategoryById(id);
+    if (!existing) {
+      throw new NotFoundError("Category not found");
+    }
+
+    if (existing.brandId) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.CATEGORIES_ARCHIVE,
+        existing.brandId
+      );
+      if (!hasPerm) {
+        throw new ForbiddenError("Not authorized to archive this category");
+      }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can archive global categories");
+      }
+    }
+
+    const archived = await this.catalogRepo.archiveCategory(id);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.category_archive",
+        entityType: "category",
+        entityId: archived.id,
+        brandId: archived.brandId,
+      });
+    }
+
+    return archived;
   }
 
   // ---------------------------------------------------------------------------
@@ -387,7 +575,13 @@ export class CatalogService {
   async createCollection(userAuth: AuthenticatedUser, input: CreateCollectionInput): Promise<Collection> {
     const validated = CreateCollectionSchema.parse(input);
 
-    if (validated.brandId) {
+    const isSuper = this.authService.isSuperAdmin(userAuth);
+
+    if (!validated.brandId) {
+      if (!isSuper) {
+        throw new ForbiddenError("Brand administrators cannot create global collections");
+      }
+    } else {
       const hasPerm = await this.authService.hasBrandPermission(
         userAuth,
         PERMISSIONS.COLLECTIONS_CREATE,
@@ -396,11 +590,6 @@ export class CatalogService {
       if (!hasPerm) {
         throw new ForbiddenError("Not authorized to create collections for this brand");
       }
-    } else {
-      const hasPerm = await this.authService.hasPermission(userAuth, PERMISSIONS.COLLECTIONS_CREATE);
-      if (!hasPerm) {
-        throw new ForbiddenError("Not authorized to create global collections");
-      }
     }
 
     const existingSlug = await this.catalogRepo.findCollectionBySlug(validated.slug);
@@ -408,7 +597,7 @@ export class CatalogService {
       throw new ValidationError(`Collection slug '${validated.slug}' already exists`);
     }
 
-    return this.catalogRepo.createCollection({
+    const collection = await this.catalogRepo.createCollection({
       id: `coll_${crypto.randomUUID()}`,
       brandId: validated.brandId,
       name: validated.name,
@@ -417,6 +606,113 @@ export class CatalogService {
       status: validated.status ?? "DRAFT",
       isFeatured: validated.isFeatured ?? false,
     });
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_create",
+        entityType: "collection",
+        entityId: collection.id,
+        brandId: collection.brandId,
+        metadata: { name: collection.name, slug: collection.slug },
+      });
+    }
+
+    return collection;
+  }
+
+  async listCollections(
+    userAuth: AuthenticatedUser | null,
+    filters?: { brandId?: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" }
+  ): Promise<Collection[]> {
+    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+
+    if (authorizedBrandIds !== null) {
+      if (filters?.brandId) {
+        if (!authorizedBrandIds.includes(filters.brandId)) {
+          throw new ForbiddenError("Not authorized to view collections for this brand");
+        }
+        return this.catalogRepo.listCollections({ ...filters, brandId: filters.brandId });
+      }
+      return this.catalogRepo.listCollections({ ...filters, brandId: authorizedBrandIds });
+    }
+
+    return this.catalogRepo.listCollections(filters);
+  }
+
+  async updateCollection(userAuth: AuthenticatedUser, id: string, input: UpdateCollectionInput): Promise<Collection> {
+    const validated = UpdateCollectionSchema.parse(input);
+
+    const existing = await this.catalogRepo.findCollectionById(id);
+    if (!existing) {
+      throw new NotFoundError("Collection not found");
+    }
+
+    if (existing.brandId) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.COLLECTIONS_UPDATE,
+        existing.brandId
+      );
+      if (!hasPerm) {
+        throw new ForbiddenError("Not authorized to update this collection");
+      }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can update global collections");
+      }
+    }
+
+    const updated = await this.catalogRepo.updateCollection(id, validated);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_update",
+        entityType: "collection",
+        entityId: updated.id,
+        brandId: updated.brandId,
+        metadata: { updatedFields: Object.keys(input) },
+      });
+    }
+
+    return updated;
+  }
+
+  async archiveCollection(userAuth: AuthenticatedUser, id: string): Promise<Collection> {
+    const existing = await this.catalogRepo.findCollectionById(id);
+    if (!existing) {
+      throw new NotFoundError("Collection not found");
+    }
+
+    if (existing.brandId) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.COLLECTIONS_ARCHIVE,
+        existing.brandId
+      );
+      if (!hasPerm) {
+        throw new ForbiddenError("Not authorized to archive this collection");
+      }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can archive global collections");
+      }
+    }
+
+    const archived = await this.catalogRepo.archiveCollection(id);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_archive",
+        entityType: "collection",
+        entityId: archived.id,
+        brandId: archived.brandId,
+      });
+    }
+
+    return archived;
   }
 
   async addProductToCollection(
@@ -444,9 +740,68 @@ export class CatalogService {
       if (!hasPerm) {
         throw new ForbiddenError("Not authorized to update this collection");
       }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can add products to global collections");
+      }
+    }
+
+    // Cross-brand collection membership check: collection & product must match brand if collection is brand-scoped
+    if (collection.brandId && collection.brandId !== product.brandId) {
+      throw new ForbiddenError("Product and collection belong to different brands");
     }
 
     await this.catalogRepo.addProductToCollection(collectionId, productId, position);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_product_add",
+        entityType: "collection",
+        entityId: collectionId,
+        brandId: collection.brandId ?? product.brandId,
+        metadata: { productId, position },
+      });
+    }
+  }
+
+  async removeProductFromCollection(
+    userAuth: AuthenticatedUser,
+    collectionId: string,
+    productId: string
+  ): Promise<void> {
+    const collection = await this.catalogRepo.findCollectionById(collectionId);
+    if (!collection) {
+      throw new NotFoundError("Collection not found");
+    }
+
+    if (collection.brandId) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.COLLECTIONS_UPDATE,
+        collection.brandId
+      );
+      if (!hasPerm) {
+        throw new ForbiddenError("Not authorized to update this collection");
+      }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can update global collections");
+      }
+    }
+
+    await this.catalogRepo.removeProductFromCollection(collectionId, productId);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_product_remove",
+        entityType: "collection",
+        entityId: collectionId,
+        brandId: collection.brandId,
+        metadata: { productId },
+      });
+    }
   }
 
   async reorderCollectionProducts(
@@ -468,9 +823,34 @@ export class CatalogService {
       if (!hasPerm) {
         throw new ForbiddenError("Not authorized to update this collection");
       }
+    } else {
+      if (!this.authService.isSuperAdmin(userAuth)) {
+        throw new ForbiddenError("Only SUPER_ADMIN can update global collections");
+      }
+    }
+
+    // Verify all products belong to collection's brand if collection is brand-scoped
+    if (collection.brandId) {
+      for (const item of ordering) {
+        const prod = await this.catalogRepo.findProductById(item.productId);
+        if (prod && prod.brandId !== collection.brandId) {
+          throw new ForbiddenError(`Product '${prod.name}' belongs to a different brand than the collection`);
+        }
+      }
     }
 
     await this.catalogRepo.reorderCollectionProducts(collectionId, ordering);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.collection_products_reorder",
+        entityType: "collection",
+        entityId: collectionId,
+        brandId: collection.brandId,
+        metadata: { orderingCount: ordering.length },
+      });
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -518,6 +898,7 @@ export class CatalogService {
           type: validated.type,
           change: validated.quantityChange,
           newQuantity: updatedInv.quantity,
+          reservedQuantity: updatedInv.reservedQuantity,
         },
       });
     }
@@ -567,7 +948,128 @@ export class CatalogService {
       metadata: validated.metadata ? JSON.stringify(validated.metadata) : null,
     });
 
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.media_create",
+        entityType: "product_media",
+        entityId: media.id,
+        brandId: product.brandId,
+        metadata: { productId: product.id, mediaType: media.mediaType, url: media.url },
+      });
+    }
+
     return media;
+  }
+
+  async updateMedia(userAuth: AuthenticatedUser, id: string, input: UpdateMediaInput): Promise<ProductMedia> {
+    const validated = UpdateMediaSchema.parse(input);
+
+    const existing = await this.catalogRepo.findMediaById(id);
+    if (!existing) {
+      throw new NotFoundError("Media record not found");
+    }
+
+    const product = await this.catalogRepo.findProductById(existing.productId);
+    if (!product) {
+      throw new NotFoundError("Associated product not found");
+    }
+
+    const hasPerm = await this.authService.hasBrandPermission(
+      userAuth,
+      PERMISSIONS.MEDIA_UPDATE,
+      product.brandId
+    );
+    if (!hasPerm) {
+      throw new ForbiddenError("Not authorized to update media for this brand");
+    }
+
+    const { metadata, ...restFields } = validated;
+    const updatePayload: Partial<ProductMedia> = { ...restFields };
+    if (metadata !== undefined) {
+      updatePayload.metadata = metadata ? JSON.stringify(metadata) : null;
+    }
+
+    const updated = await this.catalogRepo.updateMedia(id, updatePayload);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.media_update",
+        entityType: "product_media",
+        entityId: updated.id,
+        brandId: product.brandId,
+        metadata: { updatedFields: Object.keys(input) },
+      });
+    }
+
+    return updated;
+  }
+
+  async deleteMedia(userAuth: AuthenticatedUser, id: string): Promise<void> {
+    const existing = await this.catalogRepo.findMediaById(id);
+    if (!existing) {
+      throw new NotFoundError("Media record not found");
+    }
+
+    const product = await this.catalogRepo.findProductById(existing.productId);
+    if (!product) {
+      throw new NotFoundError("Associated product not found");
+    }
+
+    const hasPerm = await this.authService.hasBrandPermission(
+      userAuth,
+      PERMISSIONS.MEDIA_DELETE,
+      product.brandId
+    );
+    if (!hasPerm) {
+      throw new ForbiddenError("Not authorized to delete media for this brand");
+    }
+
+    await this.catalogRepo.deleteMedia(id);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.media_delete",
+        entityType: "product_media",
+        entityId: id,
+        brandId: product.brandId,
+      });
+    }
+  }
+
+  async reorderMedia(
+    userAuth: AuthenticatedUser,
+    productId: string,
+    ordering: { mediaId: string; position: number }[]
+  ): Promise<void> {
+    const product = await this.catalogRepo.findProductById(productId);
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    const hasPerm = await this.authService.hasBrandPermission(
+      userAuth,
+      PERMISSIONS.MEDIA_UPDATE,
+      product.brandId
+    );
+    if (!hasPerm) {
+      throw new ForbiddenError("Not authorized to update media for this brand");
+    }
+
+    await this.catalogRepo.reorderMedia(productId, ordering);
+
+    if (this.auditService) {
+      await this.auditService.log({
+        actorUserId: userAuth.user.id,
+        action: "catalog.media_reorder",
+        entityType: "product_media",
+        entityId: productId,
+        brandId: product.brandId,
+        metadata: { orderingCount: ordering.length },
+      });
+    }
   }
 
   async listMediaByProduct(userAuth: AuthenticatedUser | null, productId: string): Promise<ProductMedia[]> {

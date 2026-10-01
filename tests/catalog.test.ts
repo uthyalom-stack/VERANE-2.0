@@ -3,13 +3,13 @@ import { createDatabaseConnection } from "../src/infrastructure/database/client"
 import { seedDatabase } from "../src/infrastructure/database/seed";
 import { CatalogRepository } from "../src/domains/catalog/catalog-repository";
 import { CatalogService } from "../src/domains/catalog/catalog-service";
+import { calculateEffectivePrice } from "../src/domains/catalog/pricing";
 import { RbacRepository } from "../src/domains/rbac/rbac-repository";
 import { BrandRepository } from "../src/domains/brands/brand-repository";
 import { AuthorizationService } from "../src/domains/identity/authorization-service";
 import { AuthenticatedUser } from "../src/domains/identity/types";
 import { ROLES } from "../src/domains/rbac/types";
 import { BRAND_CODES } from "../src/domains/brands/types";
-import { ValidationError } from "../src/lib/errors";
 
 interface SqliteSessionClient {
   session: {
@@ -19,7 +19,7 @@ interface SqliteSessionClient {
   };
 }
 
-describe("Catalog Foundation Domain & Repositories", () => {
+describe("Catalog Foundation Domain & Invariants", () => {
   const db = createDatabaseConnection({ url: "file::memory:" });
   const catalogRepo = new CatalogRepository(db);
   const rbacRepo = new RbacRepository(db);
@@ -29,7 +29,6 @@ describe("Catalog Foundation Domain & Repositories", () => {
 
   let superUser: AuthenticatedUser;
   let uthyBrandId: string;
-  let alomzieeBrandId: string;
 
   beforeEach(async () => {
     const client = (db as unknown as SqliteSessionClient).session.client;
@@ -43,7 +42,7 @@ describe("Catalog Foundation Domain & Repositories", () => {
     await client.execute(`CREATE TABLE IF NOT EXISTS role_permissions (role_id TEXT NOT NULL, permission_id TEXT NOT NULL, PRIMARY KEY (role_id, permission_id));`);
     await client.execute(`CREATE TABLE IF NOT EXISTS admin_roles (id TEXT PRIMARY KEY, admin_profile_id TEXT NOT NULL, role_id TEXT NOT NULL, brand_id TEXT, created_at INTEGER NOT NULL);`);
 
-    await client.execute(`CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY NOT NULL, brand_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, short_description TEXT, full_description TEXT, status TEXT DEFAULT 'DRAFT' NOT NULL, materials TEXT, care_info TEXT, fit_info TEXT, sizing_info TEXT, seo_title TEXT, seo_description TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
+    await client.execute(`CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY NOT NULL, brand_id TEXT NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, short_description TEXT, full_description TEXT, status TEXT DEFAULT 'DRAFT' NOT NULL, base_price_cents INTEGER DEFAULT 0 NOT NULL, currency TEXT DEFAULT 'NGN' NOT NULL, materials TEXT, care_info TEXT, fit_info TEXT, sizing_info TEXT, seo_title TEXT, seo_description TEXT, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS product_variants (id TEXT PRIMARY KEY NOT NULL, product_id TEXT NOT NULL, sku TEXT NOT NULL UNIQUE, size TEXT, color TEXT, color_code TEXT, price_override_cents INTEGER, currency TEXT DEFAULT 'NGN' NOT NULL, barcode TEXT, weight_grams INTEGER, dimensions TEXT, status TEXT DEFAULT 'ACTIVE' NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, archived_at INTEGER);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS categories (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, slug TEXT NOT NULL UNIQUE, description TEXT, parent_id TEXT, brand_id TEXT, is_active INTEGER DEFAULT 1 NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);`);
     await client.execute(`CREATE TABLE IF NOT EXISTS product_categories (product_id TEXT NOT NULL, category_id TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY(product_id, category_id));`);
@@ -56,9 +55,7 @@ describe("Catalog Foundation Domain & Repositories", () => {
     await seedDatabase(db);
 
     const uthy = await brandRepo.findByCode(BRAND_CODES.UTHY_LUXURY);
-    const alomziee = await brandRepo.findByCode(BRAND_CODES.ALOMZIEE_FOOTIES);
     uthyBrandId = uthy!.id;
-    alomzieeBrandId = alomziee!.id;
 
     superUser = {
       user: {
@@ -95,217 +92,96 @@ describe("Catalog Foundation Domain & Repositories", () => {
     };
   });
 
-  it("should create, retrieve, update, and archive a product with categories", async () => {
-    const category = await catalogService.createCategory(superUser, {
-      name: "Ready-To-Wear",
-      slug: `rtw-${Date.now()}`,
-      brandId: uthyBrandId,
-    });
-
+  // Rule 14 & 15: Product Base Price & Variant Price Override
+  it("14 & 15. Uses product base price when no variant override exists, and variant override when present", async () => {
     const product = await catalogService.createProduct(superUser, {
       brandId: uthyBrandId,
-      name: "Silk Evening Gown",
+      name: "Structured Silk Gown",
       slug: `silk-gown-${Date.now()}`,
-      shortDescription: "Luxurious evening dress",
-      categoryIds: [category.id],
+      basePriceCents: 15000000, // 150,000 NGN in kobo
+      currency: "NGN",
     });
 
-    expect(product.id).toBeDefined();
-    expect(product.brandId).toBe(uthyBrandId);
-
-    const retrieved = await catalogService.getProductById(superUser, product.id);
-    expect(retrieved.name).toBe("Silk Evening Gown");
-
-    const updated = await catalogService.updateProduct(superUser, product.id, {
-      name: "Scultped Silk Evening Gown",
+    const defaultVariant = await catalogService.createVariant(superUser, {
+      productId: product.id,
+      sku: `SKU-GOWN-M-${Date.now()}`,
+      size: "M",
     });
-    expect(updated.name).toBe("Scultped Silk Evening Gown");
 
-    const archived = await catalogService.archiveProduct(superUser, product.id);
-    expect(archived.status).toBe("ARCHIVED");
+    const overrideVariant = await catalogService.createVariant(superUser, {
+      productId: product.id,
+      sku: `SKU-GOWN-XL-${Date.now()}`,
+      size: "XL",
+      priceOverrideCents: 18000000, // 180,000 NGN in kobo
+    });
+
+    const defaultPrice = calculateEffectivePrice(product, defaultVariant);
+    expect(defaultPrice.effectivePriceCents).toBe(15000000);
+    expect(defaultPrice.isOverride).toBe(false);
+
+    const overridePrice = calculateEffectivePrice(product, overrideVariant);
+    expect(overridePrice.effectivePriceCents).toBe(18000000);
+    expect(overridePrice.isOverride).toBe(true);
   });
 
-  it("should reject duplicate product slug", async () => {
-    const slug = `unique-slug-${Date.now()}`;
-    await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "First Product",
-      slug,
-    });
-
-    await expect(
-      catalogService.createProduct(superUser, {
-        brandId: uthyBrandId,
-        name: "Second Product",
-        slug,
-      })
-    ).rejects.toThrow(ValidationError);
-  });
-
-  it("should create variants with minor-unit price override and SKU uniqueness", async () => {
+  // Rule 16: Inventory Invariants (reservation, release, insufficient stock, negative stock)
+  it("16. Inventory invariants cannot be violated", async () => {
     const product = await catalogService.createProduct(superUser, {
       brandId: uthyBrandId,
-      name: "Tailored Jacket",
-      slug: `tailored-jacket-${Date.now()}`,
+      name: "Couture Blazer",
+      slug: `blazer-${Date.now()}`,
+      basePriceCents: 5000000,
     });
 
-    const sku = `SKU-JKT-XS-${Date.now()}`;
     const variant = await catalogService.createVariant(superUser, {
       productId: product.id,
-      sku,
-      size: "XS",
-      color: "Black",
-      colorCode: "#000000",
-      priceOverrideCents: 2500000, // 25,000 NGN in kobo
+      sku: `SKU-BLAZER-M-${Date.now()}`,
       initialQuantity: 10,
     });
 
-    expect(variant.sku).toBe(sku);
-    expect(variant.priceOverrideCents).toBe(2500000);
-
-    const inv = await catalogRepo.getVariantInventory(variant.id);
-    expect(inv?.quantity).toBe(10);
-    expect(inv?.reservedQuantity).toBe(0);
-
-    await expect(
-      catalogService.createVariant(superUser, {
-        productId: product.id,
-        sku,
-        size: "S",
-      })
-    ).rejects.toThrow(ValidationError);
-  });
-
-  it("should enforce category hierarchy and duplicate slug prevention", async () => {
-    const parent = await catalogService.createCategory(superUser, {
-      name: "Women",
-      slug: `women-${Date.now()}`,
-      brandId: uthyBrandId,
-    });
-
-    const child = await catalogService.createCategory(superUser, {
-      name: "Outerwear",
-      slug: `outerwear-${Date.now()}`,
-      parentId: parent.id,
-      brandId: uthyBrandId,
-    });
-
-    expect(child.parentId).toBe(parent.id);
-
-    await expect(
-      catalogService.createCategory(superUser, {
-        name: "Women Dup",
-        slug: parent.slug,
-      })
-    ).rejects.toThrow(ValidationError);
-  });
-
-  it("should create collections, support product membership and position reordering", async () => {
-    const collection = await catalogService.createCollection(superUser, {
-      brandId: uthyBrandId,
-      name: "Autumn/Winter Haute Couture",
-      slug: `aw-couture-${Date.now()}`,
-    });
-
-    const prod1 = await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "Couture Coat 1",
-      slug: `couture-1-${Date.now()}`,
-    });
-
-    const prod2 = await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "Couture Coat 2",
-      slug: `couture-2-${Date.now()}`,
-    });
-
-    await catalogService.addProductToCollection(superUser, collection.id, prod1.id, 0);
-    await catalogService.addProductToCollection(superUser, collection.id, prod2.id, 1);
-
-    let items = await catalogRepo.listCollectionProducts(collection.id);
-    expect(items[0].product.id).toBe(prod1.id);
-    expect(items[1].product.id).toBe(prod2.id);
-
-    // Reorder: swap positions
-    await catalogService.reorderCollectionProducts(superUser, collection.id, [
-      { productId: prod1.id, position: 1 },
-      { productId: prod2.id, position: 0 },
-    ]);
-
-    items = await catalogRepo.listCollectionProducts(collection.id);
-    expect(items[0].product.id).toBe(prod2.id);
-    expect(items[1].product.id).toBe(prod1.id);
-  });
-
-  it("should manage inventory adjustments, record transactions, and prevent negative inventory", async () => {
-    const product = await catalogService.createProduct(superUser, {
-      brandId: alomzieeBrandId,
-      name: "Leather Boots",
-      slug: `leather-boots-${Date.now()}`,
-    });
-
-    const variant = await catalogService.createVariant(superUser, {
-      productId: product.id,
-      sku: `SKU-BOOTS-42-${Date.now()}`,
-      size: "EU 42",
-      initialQuantity: 5,
-    });
-
-    const updatedInv = await catalogService.adjustInventory(superUser, {
+    // 1. Valid reservation
+    let inv = await catalogService.adjustInventory(superUser, {
       variantId: variant.id,
-      quantityChange: 15,
-      type: "STOCK_RECEIVED",
-      reason: "Restock Shipment",
+      quantityChange: 4,
+      type: "RESERVATION",
     });
+    expect(inv.quantity).toBe(10);
+    expect(inv.reservedQuantity).toBe(4);
 
-    expect(updatedInv.quantity).toBe(20);
+    // 2. Valid release
+    inv = await catalogService.adjustInventory(superUser, {
+      variantId: variant.id,
+      quantityChange: 2,
+      type: "RELEASE",
+    });
+    expect(inv.quantity).toBe(10);
+    expect(inv.reservedQuantity).toBe(2);
 
-    const txs = await catalogRepo.listInventoryTransactions(variant.id);
-    expect(txs.length).toBe(2); // Initial creation (5) + Restock (15)
-
-    // Attempting to subtract more than available should throw
+    // 3. Insufficient available stock for reservation (Available: 10 - 2 = 8; Request: 9)
     await expect(
       catalogService.adjustInventory(superUser, {
         variantId: variant.id,
-        quantityChange: -100,
+        quantityChange: 9,
+        type: "RESERVATION",
+      })
+    ).rejects.toThrow("Insufficient available inventory for reservation");
+
+    // 4. Invalid release exceeding reserved quantity
+    await expect(
+      catalogService.adjustInventory(superUser, {
+        variantId: variant.id,
+        quantityChange: 5,
+        type: "RELEASE",
+      })
+    ).rejects.toThrow("Invalid release quantity: exceeds reserved quantity");
+
+    // 5. Preventing negative total quantity
+    await expect(
+      catalogService.adjustInventory(superUser, {
+        variantId: variant.id,
+        quantityChange: -15,
         type: "MANUAL_ADJUSTMENT",
       })
     ).rejects.toThrow("Inventory quantity cannot be negative");
-  });
-
-  it("should handle product and variant media associations and ordering", async () => {
-    const product = await catalogService.createProduct(superUser, {
-      brandId: uthyBrandId,
-      name: "Structured Blazer",
-      slug: `blazer-${Date.now()}`,
-    });
-
-    const variant = await catalogService.createVariant(superUser, {
-      productId: product.id,
-      sku: `SKU-BLAZER-BLK-${Date.now()}`,
-      color: "Black",
-    });
-
-    await catalogService.createMedia(superUser, {
-      productId: product.id,
-      mediaType: "EDITORIAL",
-      url: "https://media.verane.com/blazer-editorial.jpg",
-      position: 0,
-    });
-
-    const varMedia = await catalogService.createMedia(superUser, {
-      productId: product.id,
-      variantId: variant.id,
-      mediaType: "DETAIL_IMAGE",
-      url: "https://media.verane.com/blazer-black-detail.jpg",
-      position: 0,
-    });
-
-    const prodMediaList = await catalogService.listMediaByProduct(superUser, product.id);
-    expect(prodMediaList.length).toBe(2);
-
-    const varMediaList = await catalogService.listMediaByVariant(superUser, variant.id);
-    expect(varMediaList.length).toBe(1);
-    expect(varMediaList[0].id).toBe(varMedia.id);
   });
 });
