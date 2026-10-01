@@ -8,6 +8,13 @@
       "when": 1790840276894,
       "tag": "0000_tiny_may_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1790856643273,
+      "tag": "0001_nasty_miracleman",
+      "breakpoints": true
     }
   ]
 }
