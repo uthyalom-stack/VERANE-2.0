@@ -2,7 +2,7 @@
 
 **Two Brands. One Expression.**
 
-Digital fashion house and ecommerce platform for **UTHY LUXURY** and **ALOMZIEE FOOTIES**.
+Digital fashion house and ecommerce platform foundation for **UTHY LUXURY** and **ALOMZIEE FOOTIES**.
 
 ---
 
@@ -11,7 +11,7 @@ Digital fashion house and ecommerce platform for **UTHY LUXURY** and **ALOMZIEE 
 - **Framework:** Next.js 16 (App Router) + React 19
 - **Runtime:** Cloudflare Workers (`@opennextjs/cloudflare` + `wrangler`)
 - **Database:** Layerbase SQLite + Drizzle ORM (`@libsql/client`)
-- **Storage:** Cloudflare R2 (`@aws-sdk/client-s3`)
+- **Storage:** Cloudflare R2 (`WorkerR2StorageProvider` / `@aws-sdk/client-s3`)
 - **Styling:** Tailwind CSS v4
 - **Testing:** Vitest
 
@@ -33,13 +33,20 @@ Copy the example environment template:
 cp .env.example .env.local
 ```
 
-### 3. Database Migrations
+*Note:* `SESSION_SECRET` is required in production environments (`NODE_ENV=production`).
 
-Generate SQL migrations from Drizzle schemas:
+### 3. Database & Layerbase Setup
+
+For local development and testing, Drizzle uses a local SQLite file (`file:local.db`).
+
+To generate database migrations:
 
 ```bash
 npm run db:generate
 ```
+
+To connect to production Layerbase:
+Set `DATABASE_URL` (Layerbase endpoint) and `DATABASE_AUTH_TOKEN` in environment variables.
 
 ### 4. Run Development Server
 

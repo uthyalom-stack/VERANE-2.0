@@ -26,8 +26,8 @@ Cloudflare Workers Runtime (Next.js App Router via @opennextjs/cloudflare)
    │       ▼
    ├── Repositories (Data Abstraction Layer)
    │       │
-   │       ├── Drizzle ORM -> Layerbase SQLite (@libsql/client)
-   │       └── Media Storage -> Cloudflare R2 (@aws-sdk/client-s3)
+   │       ├── Drizzle ORM -> Layerbase SQLite / LibSQL (@libsql/client)
+   │       └── Media Storage -> Cloudflare R2 (Worker R2 Binding / S3 API)
 ```
 
 ---
@@ -44,7 +44,7 @@ src/
 ├── domains/              # Business domain logic (Catalog, Orders, etc.)
 ├── infrastructure/       # Database & external providers
 │   ├── database/         # Drizzle connection, schema, repositories
-│   └── storage/          # R2 storage provider & MediaService
+│   └── storage/          # R2 storage providers, Worker binding & MediaService
 ├── lib/                  # Cross-cutting utilities (security, logging, errors)
 └── config/               # Environment & app configuration
 ```
@@ -59,24 +59,43 @@ src/
 ## 3. Database Architecture (Drizzle + Layerbase SQLite)
 
 - **ORM:** Drizzle ORM (`drizzle-orm/libsql`).
-- **Driver:** `@libsql/client` (provides unified support for local SQLite files `file:local.db`, LibSQL protocol, and remote Layerbase SQLite instances).
+- **Driver:** `@libsql/client` (provides unified support for local SQLite files `file:local.db`, LibSQL wire protocol, and remote Layerbase SQLite instances).
 - **Repository Pattern:** UI components and domain services interact strictly through Repository interfaces (`ISmokeTestRepository`), keeping Drizzle and SQL details isolated inside `src/infrastructure/database/repositories/`.
-- **Migrations:** Managed via `drizzle-kit generate` generating declarative SQL migrations into `./drizzle`.
+
+### Database Environment & Verification Levels
+
+1. **Local Development & Integration Testing:**
+   - Uses local SQLite database (`file:local.db` or `file:test-local.db`).
+   - Verifies Drizzle ORM schema mapping, SQL query execution, and repository abstraction locally without requiring network credentials.
+2. **Layerbase Production Connectivity:**
+   - Uses Layerbase SQLite primary transactional database via `@libsql/client`.
+   - Requires setting `DATABASE_URL` (pointing to the Layerbase HTTP/WebSocket endpoint) and `DATABASE_AUTH_TOKEN` in the server environment.
+   - *Note:* Local integration tests verify the driver abstraction and repository behavior against LibSQL/SQLite, but actual Layerbase connection requires live environment secrets.
+3. **Migration Workflow:**
+   - Schema changes are defined in `src/infrastructure/database/schema/`.
+   - `npm run db:generate` runs `drizzle-kit generate` to produce declarative SQL files in `./drizzle`.
+   - Migrations are applied via the Drizzle migration runner against target database endpoints.
 
 ---
 
 ## 4. Media Storage Strategy (Cloudflare R2)
 
 - **Provider Abstraction:** `StorageProvider` interface defining `upload`, `retrieve`, `delete`, and `getPublicUrl`.
-- **R2 Implementation:** `R2StorageProvider` using `@aws-sdk/client-s3` targeting Cloudflare R2 endpoints.
+- **Worker R2 Binding Provider:** `WorkerR2StorageProvider` uses the native Cloudflare Worker `MEDIA_BUCKET` binding without requiring S3 API keys inside the Worker runtime.
+- **S3 API Provider:** `R2StorageProvider` uses `@aws-sdk/client-s3` for non-Worker node environments.
 - **Local Fallback:** `MockStorageProvider` for isolated local development and test execution.
-- **Media Service:** `MediaService` wraps storage providers for high-level domain operations.
+- **Factory:** `createStorageProvider()` dynamically selects the appropriate provider based on execution environment.
+- **Environment Isolation in Wrangler:**
+  - Default/Dev: `verane-media-dev`
+  - Preview: `verane-media-preview`
+  - Production: `verane-media-prod`
 
 ---
 
 ## 5. Security & Environment Configuration
 
 - **Env Validation:** `src/config/env.ts` enforces strict validation using Zod for server secrets and public client variables.
+- **Production Secrets:** `SESSION_SECRET` is strictly required in production (`NODE_ENV === "production"` with no default production secret). Development mode uses a documented dev-only fallback.
 - **Custom Error Taxonomy:** `src/lib/errors.ts` standardizes `ValidationError`, `NotFoundError`, `UnauthorizedError`, `ForbiddenError`, and `InfrastructureError`. Stack traces and internal secrets are hidden in production responses.
 - **Safe Logger:** `src/lib/logger.ts` automatically redacts sensitive parameters (`token`, `password`, `secret`, `database_auth_token`, `r2_secret_access_key`).
 - **Secure Cookies:** `src/lib/security.ts` provides default HTTP-only, SameSite=Lax, Secure cookie configuration.
@@ -86,13 +105,21 @@ src/
 ## 6. Testing Strategy
 
 - **Runner:** Vitest.
+- **Environment Tests:** `tests/env.test.ts` verifies strict Zod production validation for `SESSION_SECRET`.
 - **Database Smoke Test:** Real local SQLite write -> read -> delete database verification (`tests/database.smoke.test.ts`).
-- **Storage Smoke Test:** Upload -> retrieve -> delete verification (`tests/storage.smoke.test.ts`).
+- **Storage Smoke Test:** Upload -> retrieve -> delete verification for both Mock and Worker R2 bindings (`tests/storage.smoke.test.ts`).
 - **API & Security Smoke Test:** Validation and error formatting verification (`tests/api.smoke.test.ts`).
 
 ---
 
-## 7. Known Limitations & Verification Notes
+## 7. Explicit Verification Status & Manual Requirements
 
-- **Cloudflare R2 Credentials:** Verified via `@aws-sdk/client-s3` local unit/integration tests and Wrangler configuration. Production deployment requires live R2 bucket binding credentials.
-- **Layerbase Credentials:** Local tests execute against LibSQL/SQLite adapter (`file:test-local.db`). In production, `DATABASE_URL` points to the Layerbase HTTP/WebSocket endpoint.
+- **Verified Locally:**
+  - Next.js 16 build & TypeScript compilation.
+  - Vitest test suite (environment validation, repository pattern, database smoke test, storage abstraction, worker R2 binding mock).
+  - OpenNext Cloudflare Workers build (`npm run cf:build`).
+  - ESLint verification.
+  - VÉRANE foundation homepage and metadata.
+- **Requires Live Deployment Credentials (Manual Setup):**
+  - **Layerbase Database:** Live `DATABASE_URL` and `DATABASE_AUTH_TOKEN` must be configured in Cloudflare Worker environment variables for production database access.
+  - **Cloudflare R2 Buckets:** Cloudflare dashboard buckets (`verane-media-dev`, `verane-media-preview`, `verane-media-prod`) must be provisioned and bound in Cloudflare.

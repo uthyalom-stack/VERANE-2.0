@@ -11,7 +11,25 @@
   "r2_buckets": [
     {
       "binding": "MEDIA_BUCKET",
-      "bucket_name": "verane-media-prod"
+      "bucket_name": "verane-media-dev"
     }
-  ]
+  ],
+  "env": {
+    "preview": {
+      "r2_buckets": [
+        {
+          "binding": "MEDIA_BUCKET",
+          "bucket_name": "verane-media-preview"
+        }
+      ]
+    },
+    "production": {
+      "r2_buckets": [
+        {
+          "binding": "MEDIA_BUCKET",
+          "bucket_name": "verane-media-prod"
+        }
+      ]
+    }
+  }
 }
