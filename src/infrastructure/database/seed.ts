@@ -78,7 +78,7 @@ export async function seedDatabase(db: Database) {
     createdPermissionsMap.set(permName, perm.id);
   }
 
-  // Define permissions appropriate for brand administrators (operational permissions for products, inventory, orders, content, analytics)
+  // Define permissions appropriate for brand administrators
   const brandAdminPermissions = [
     PERMISSIONS.PRODUCTS_READ,
     PERMISSIONS.PRODUCTS_CREATE,
@@ -96,20 +96,18 @@ export async function seedDatabase(db: Database) {
     PERMISSIONS.CUSTOMERS_READ,
   ];
 
-  // 4. Seed Role-Permissions (Idempotent)
+  // 4. Sync Role-Permissions (Reconciles state by removing stale permissions & inserting missing ones)
   // SUPER_ADMIN gets ALL permissions
-  for (const [, permId] of createdPermissionsMap.entries()) {
-    await rbacRepo.assignPermissionToRole(superAdminRole.id, permId);
-  }
+  const allPermissionIds = Array.from(createdPermissionsMap.values());
+  await rbacRepo.syncRolePermissions(superAdminRole.id, allPermissionIds);
 
-  // UTHY_ADMIN and ALOMZIEE_ADMIN get operational brand permissions
-  for (const permName of brandAdminPermissions) {
-    const permId = createdPermissionsMap.get(permName);
-    if (permId) {
-      await rbacRepo.assignPermissionToRole(uthyAdminRole.id, permId);
-      await rbacRepo.assignPermissionToRole(alomzieeAdminRole.id, permId);
-    }
-  }
+  // UTHY_ADMIN and ALOMZIEE_ADMIN get ONLY operational brand permissions
+  const brandAdminPermissionIds = brandAdminPermissions
+    .map((permName) => createdPermissionsMap.get(permName))
+    .filter((id): id is string => id !== undefined);
+
+  await rbacRepo.syncRolePermissions(uthyAdminRole.id, brandAdminPermissionIds);
+  await rbacRepo.syncRolePermissions(alomzieeAdminRole.id, brandAdminPermissionIds);
 
   logger.info("Database seed completed successfully.");
 }

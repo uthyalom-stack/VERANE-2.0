@@ -11,7 +11,7 @@ import {
   NewPermission,
   NewAdminRole,
 } from "@/infrastructure/database/schema";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, notInArray } from "drizzle-orm";
 import { AdminRoleAssignment } from "./types";
 
 export class RbacRepository {
@@ -41,6 +41,23 @@ export class RbacRepository {
 
   async assignPermissionToRole(roleId: string, permissionId: string): Promise<void> {
     await this.db.insert(rolePermissions).values({ roleId, permissionId }).onConflictDoNothing();
+  }
+
+  async syncRolePermissions(roleId: string, allowedPermissionIds: string[]): Promise<void> {
+    if (allowedPermissionIds.length === 0) {
+      await this.db.delete(rolePermissions).where(eq(rolePermissions.roleId, roleId));
+      return;
+    }
+
+    // Delete any permissions assigned to this role that are NOT in allowedPermissionIds
+    await this.db
+      .delete(rolePermissions)
+      .where(and(eq(rolePermissions.roleId, roleId), notInArray(rolePermissions.permissionId, allowedPermissionIds)));
+
+    // Insert all allowed permissions idempotently
+    for (const permId of allowedPermissionIds) {
+      await this.assignPermissionToRole(roleId, permId);
+    }
   }
 
   async assignRoleToAdmin(data: NewAdminRole): Promise<void> {

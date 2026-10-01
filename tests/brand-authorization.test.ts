@@ -212,4 +212,41 @@ describe("Brand Authorization & RBAC Scoping", () => {
     // DENY GLOBAL hasPermission() check without brand context
     expect(await authService.hasPermission(alomzieeAuthUser, PERMISSIONS.PRODUCTS_READ)).toBe(false);
   });
+
+  it("should reconcile and remove legacy/unwanted permissions from brand admin roles when re-seeded", async () => {
+    const uthyRole = await rbacRepo.findRoleByName(ROLES.UTHY_ADMIN);
+    const alomzieeRole = await rbacRepo.findRoleByName(ROLES.ALOMZIEE_ADMIN);
+    const superRole = await rbacRepo.findRoleByName(ROLES.SUPER_ADMIN);
+
+    const settingsUpdatePerm = await rbacRepo.findPermissionByName(PERMISSIONS.SETTINGS_UPDATE);
+    const customersUpdatePerm = await rbacRepo.findPermissionByName(PERMISSIONS.CUSTOMERS_UPDATE);
+
+    // Manually assign stale non-brand permissions to brand roles
+    await rbacRepo.assignPermissionToRole(uthyRole!.id, settingsUpdatePerm!.id);
+    await rbacRepo.assignPermissionToRole(uthyRole!.id, customersUpdatePerm!.id);
+    await rbacRepo.assignPermissionToRole(alomzieeRole!.id, settingsUpdatePerm!.id);
+
+    // Verify stale permissions were added
+    const uthyPermsBefore = await rbacRepo.getPermissionsForRoles([uthyRole!.id]);
+    expect(uthyPermsBefore).toContain(PERMISSIONS.SETTINGS_UPDATE);
+    expect(uthyPermsBefore).toContain(PERMISSIONS.CUSTOMERS_UPDATE);
+
+    // Re-run database seed
+    await seedDatabase(db);
+
+    // Verify stale permissions were removed for UTHY_ADMIN and ALOMZIEE_ADMIN
+    const uthyPermsAfter = await rbacRepo.getPermissionsForRoles([uthyRole!.id]);
+    expect(uthyPermsAfter).not.toContain(PERMISSIONS.SETTINGS_UPDATE);
+    expect(uthyPermsAfter).not.toContain(PERMISSIONS.CUSTOMERS_UPDATE);
+    expect(uthyPermsAfter).toContain(PERMISSIONS.PRODUCTS_READ);
+
+    const alomzieePermsAfter = await rbacRepo.getPermissionsForRoles([alomzieeRole!.id]);
+    expect(alomzieePermsAfter).not.toContain(PERMISSIONS.SETTINGS_UPDATE);
+    expect(alomzieePermsAfter).toContain(PERMISSIONS.PRODUCTS_READ);
+
+    // Verify SUPER_ADMIN still has ALL permissions including settings.update
+    const superPermsAfter = await rbacRepo.getPermissionsForRoles([superRole!.id]);
+    expect(superPermsAfter).toContain(PERMISSIONS.SETTINGS_UPDATE);
+    expect(superPermsAfter).toContain(PERMISSIONS.CUSTOMERS_UPDATE);
+  });
 });
