@@ -62,7 +62,40 @@ describe("Brand Authorization & RBAC Scoping", () => {
     expect(await authService.hasBrandAccess(authUser, BRAND_CODES.UTHY_LUXURY)).toBe(false);
   });
 
-  it("should allow SUPER_ADMIN global access across all brands", async () => {
+  it("should deny inactive administrator from authorizing any action", async () => {
+    const passwordHash = await hashPassword("Pass123!");
+    const user = await identityRepo.createUser({
+      id: "inactive_admin_1",
+      email: "inactive.admin@verane.com",
+      name: "Inactive Admin",
+      passwordHash,
+      isActive: false,
+    });
+    const adminProfileId = await identityRepo.createAdminProfile(user.id);
+    const uthyRole = await rbacRepo.findRoleByName(ROLES.UTHY_ADMIN);
+    const uthyBrand = await brandRepo.findByCode(BRAND_CODES.UTHY_LUXURY);
+
+    await rbacRepo.assignRoleToAdmin({
+      id: "ar_inactive_uthy",
+      adminProfileId,
+      roleId: uthyRole!.id,
+      brandId: uthyBrand!.id,
+    });
+
+    const session = await identityRepo.createSession(user.id);
+    const authUser = {
+      user,
+      adminProfile: await identityRepo.getAdminProfileByUserId(user.id),
+      adminRoles: await rbacRepo.getAdminRoleAssignments(adminProfileId),
+      session,
+    };
+
+    expect(authService.isAdministrator(authUser)).toBe(false);
+    expect(await authService.hasBrandAccess(authUser, BRAND_CODES.UTHY_LUXURY)).toBe(false);
+    expect(await authService.hasBrandPermission(authUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.UTHY_LUXURY)).toBe(false);
+  });
+
+  it("should allow SUPER_ADMIN global access across all brands for brand and global permissions", async () => {
     const passwordHash = await hashPassword("Pass123!");
     const user = await identityRepo.createUser({
       id: "super_1",
@@ -94,12 +127,14 @@ describe("Brand Authorization & RBAC Scoping", () => {
     expect(await authService.hasBrandAccess(authUser, BRAND_CODES.UTHY_LUXURY)).toBe(true);
     expect(await authService.hasBrandAccess(authUser, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(true);
     expect(await authService.hasBrandPermission(authUser, PERMISSIONS.PRODUCTS_UPDATE, BRAND_CODES.UTHY_LUXURY)).toBe(true);
+    expect(await authService.hasBrandPermission(authUser, PERMISSIONS.PRODUCTS_UPDATE, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(true);
+    expect(await authService.hasPermission(authUser, PERMISSIONS.SETTINGS_UPDATE)).toBe(true);
   });
 
-  it("should enforce brand isolation between UTHY_ADMIN and ALOMZIEE_ADMIN and prevent permission unioning", async () => {
+  it("should enforce brand isolation between UTHY_ADMIN and ALOMZIEE_ADMIN and deny global hasPermission() checks", async () => {
     const passwordHash = await hashPassword("Pass123!");
 
-    // UTHY Admin setup
+    // 1. UTHY Admin setup
     const uthyUser = await identityRepo.createUser({
       id: "uthy_admin_1",
       email: "uthy@verane.com",
@@ -134,5 +169,47 @@ describe("Brand Authorization & RBAC Scoping", () => {
     expect(await authService.hasBrandAccess(uthyAuthUser, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
     expect(await authService.hasBrandPermission(uthyAuthUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
     expect(await authService.hasBrandPermission(uthyAuthUser, PERMISSIONS.INVENTORY_ADJUST, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
+
+    // DENY GLOBAL hasPermission() check without brand context for brand-scoped role
+    expect(await authService.hasPermission(uthyAuthUser, PERMISSIONS.PRODUCTS_READ)).toBe(false);
+    expect(await authService.hasPermission(uthyAuthUser, PERMISSIONS.SETTINGS_UPDATE)).toBe(false);
+
+    // 2. ALOMZIEE Admin setup
+    const alomzieeUser = await identityRepo.createUser({
+      id: "alomziee_admin_1",
+      email: "alomziee@verane.com",
+      name: "Alomziee Admin",
+      passwordHash,
+      isActive: true,
+    });
+    const alomzieeAdminProfileId = await identityRepo.createAdminProfile(alomzieeUser.id);
+    const alomzieeRole = await rbacRepo.findRoleByName(ROLES.ALOMZIEE_ADMIN);
+    const alomzieeBrand = await brandRepo.findByCode(BRAND_CODES.ALOMZIEE_FOOTIES);
+
+    await rbacRepo.assignRoleToAdmin({
+      id: "ar_alomziee",
+      adminProfileId: alomzieeAdminProfileId,
+      roleId: alomzieeRole!.id,
+      brandId: alomzieeBrand!.id,
+    });
+
+    const alomzieeSession = await identityRepo.createSession(alomzieeUser.id);
+    const alomzieeAuthUser = {
+      user: alomzieeUser,
+      adminProfile: await identityRepo.getAdminProfileByUserId(alomzieeUser.id),
+      adminRoles: await rbacRepo.getAdminRoleAssignments(alomzieeAdminProfileId),
+      session: alomzieeSession,
+    };
+
+    // Verify ALOMZIEE Admin permissions for ALOMZIEE
+    expect(await authService.hasBrandAccess(alomzieeAuthUser, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(true);
+    expect(await authService.hasBrandPermission(alomzieeAuthUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(true);
+
+    // STRICT CROSS-BRAND DENIAL
+    expect(await authService.hasBrandAccess(alomzieeAuthUser, BRAND_CODES.UTHY_LUXURY)).toBe(false);
+    expect(await authService.hasBrandPermission(alomzieeAuthUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.UTHY_LUXURY)).toBe(false);
+
+    // DENY GLOBAL hasPermission() check without brand context
+    expect(await authService.hasPermission(alomzieeAuthUser, PERMISSIONS.PRODUCTS_READ)).toBe(false);
   });
 });

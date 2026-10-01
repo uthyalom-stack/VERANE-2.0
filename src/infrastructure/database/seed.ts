@@ -78,12 +78,37 @@ export async function seedDatabase(db: Database) {
     createdPermissionsMap.set(permName, perm.id);
   }
 
-  // 4. Seed Role-Permissions
+  // Define permissions appropriate for brand administrators (operational permissions for products, inventory, orders, content, analytics)
+  const brandAdminPermissions = [
+    PERMISSIONS.PRODUCTS_READ,
+    PERMISSIONS.PRODUCTS_CREATE,
+    PERMISSIONS.PRODUCTS_UPDATE,
+    PERMISSIONS.PRODUCTS_ARCHIVE,
+    PERMISSIONS.ORDERS_READ,
+    PERMISSIONS.ORDERS_UPDATE,
+    PERMISSIONS.INVENTORY_READ,
+    PERMISSIONS.INVENTORY_ADJUST,
+    PERMISSIONS.CONTENT_READ,
+    PERMISSIONS.CONTENT_CREATE,
+    PERMISSIONS.CONTENT_UPDATE,
+    PERMISSIONS.CONTENT_PUBLISH,
+    PERMISSIONS.ANALYTICS_READ,
+    PERMISSIONS.CUSTOMERS_READ,
+  ];
+
+  // 4. Seed Role-Permissions (Idempotent)
+  // SUPER_ADMIN gets ALL permissions
   for (const [, permId] of createdPermissionsMap.entries()) {
-    // Assign all permissions to SUPER_ADMIN, UTHY_ADMIN, and ALOMZIEE_ADMIN roles (brand scoping limits target brand in admin_roles)
     await rbacRepo.assignPermissionToRole(superAdminRole.id, permId);
-    await rbacRepo.assignPermissionToRole(uthyAdminRole.id, permId);
-    await rbacRepo.assignPermissionToRole(alomzieeAdminRole.id, permId);
+  }
+
+  // UTHY_ADMIN and ALOMZIEE_ADMIN get operational brand permissions
+  for (const permName of brandAdminPermissions) {
+    const permId = createdPermissionsMap.get(permName);
+    if (permId) {
+      await rbacRepo.assignPermissionToRole(uthyAdminRole.id, permId);
+      await rbacRepo.assignPermissionToRole(alomzieeAdminRole.id, permId);
+    }
   }
 
   logger.info("Database seed completed successfully.");
