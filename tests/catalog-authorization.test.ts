@@ -7,9 +7,9 @@ import { CatalogService } from "../src/domains/catalog/catalog-service";
 import { AuthorizationService } from "../src/domains/identity/authorization-service";
 import { seedDatabase } from "../src/infrastructure/database/seed";
 import { BRAND_CODES } from "../src/domains/brands/types";
-import { ROLES } from "../src/domains/rbac/types";
+import { ROLES, PERMISSIONS } from "../src/domains/rbac/types";
 import { AuthenticatedUser } from "../src/domains/identity/types";
-import { ForbiddenError } from "../src/lib/errors";
+import { ForbiddenError, NotFoundError, ValidationError } from "../src/lib/errors";
 
 interface SqliteSessionClient {
   session: {
@@ -179,7 +179,6 @@ describe("Catalog Brand-Scoped Authorization Enforcement", () => {
     expect(alomzieeList.map((p) => p.id)).toContain(alomzieeProd.id);
     expect(alomzieeList.map((p) => p.id)).not.toContain(uthyProd.id);
 
-    // Attempting to list with explicitly forged brandId filter
     await expect(
       catalogService.listProducts(uthyAdminUser, { brandId: alomzieeBrandId })
     ).rejects.toThrow(ForbiddenError);
@@ -302,12 +301,10 @@ describe("Catalog Brand-Scoped Authorization Enforcement", () => {
       slug: `alomziee-loafers-${Date.now()}`,
     });
 
-    // UTHY collection receiving ALOMZIEE product -> Rejected
     await expect(
       catalogService.addProductToCollection(superUser, uthyColl.id, alomzieeProd.id)
     ).rejects.toThrow(ForbiddenError);
 
-    // ALOMZIEE collection receiving UTHY product -> Rejected
     await expect(
       catalogService.addProductToCollection(superUser, alomzieeColl.id, uthyProd.id)
     ).rejects.toThrow(ForbiddenError);
@@ -347,5 +344,155 @@ describe("Catalog Brand-Scoped Authorization Enforcement", () => {
       brandId: null,
     });
     expect(globalColl.id).toBeDefined();
+  });
+
+  // Granular read permissions enforcement
+  it("should enforce granular read permissions (products.read, categories.read, collections.read, inventory.read, media.read)", async () => {
+    // Create custom role without products.read
+    const customRole = await rbacRepo.createRole({
+      id: "role_custom_no_read",
+      name: "CUSTOM_NO_READ",
+      description: "Custom role missing read permissions",
+    });
+
+    const restrictedUser: AuthenticatedUser = {
+      user: {
+        id: "user_restricted",
+        email: "restricted@verane.com",
+        name: "Restricted Admin",
+        passwordHash: "hash",
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      adminProfile: {
+        id: "admin_restricted",
+        userId: "user_restricted",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      adminRoles: [
+        {
+          roleId: customRole.id,
+          roleName: "CUSTOM_NO_READ",
+          brandId: uthyBrandId,
+          brandCode: BRAND_CODES.UTHY_LUXURY,
+        },
+      ],
+      session: {
+        id: "sess_restr",
+        userId: "user_restricted",
+        expiresAt: new Date(Date.now() + 3600000),
+        createdAt: new Date(),
+        lastUsedAt: new Date(),
+        revokedAt: null,
+      },
+    };
+
+    // 1. products.read missing -> rejected
+    await expect(catalogService.listProducts(restrictedUser)).rejects.toThrow(ForbiddenError);
+
+    // 2. categories.read missing -> rejected
+    await expect(catalogService.listCategories(restrictedUser)).rejects.toThrow(ForbiddenError);
+
+    // 3. collections.read missing -> rejected
+    await expect(catalogService.listCollections(restrictedUser)).rejects.toThrow(ForbiddenError);
+
+    // 4. inventory.read missing -> rejected
+    await expect(catalogService.listInventory(restrictedUser)).rejects.toThrow(ForbiddenError);
+  });
+
+  // Extra PR #4 checks: Prevent category & collection brand ownership changes
+  it("should prevent category and collection brand ownership mutations via update schemas/actions", async () => {
+    const uthyCat = await catalogService.createCategory(uthyAdminUser, {
+      name: "UTHY Scarves",
+      slug: `uthy-scarves-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const updatedCat = await catalogService.updateCategory(uthyAdminUser, uthyCat.id, {
+      name: "UTHY Silk Scarves",
+    });
+    expect(updatedCat.brandId).toBe(uthyBrandId);
+
+    const uthyColl = await catalogService.createCollection(uthyAdminUser, {
+      name: "UTHY Autumn Collection",
+      slug: `uthy-autumn-${Date.now()}`,
+      brandId: uthyBrandId,
+    });
+
+    const updatedColl = await catalogService.updateCollection(uthyAdminUser, uthyColl.id, {
+      name: "UTHY Autumn Haute Couture",
+    });
+    expect(updatedColl.brandId).toBe(uthyBrandId);
+  });
+
+  // Extra PR #4 checks: Cross-product media variant reassignment
+  it("should reject reassigning media to a variant belonging to a different product", async () => {
+    const prodA = await catalogService.createProduct(superUser, {
+      brandId: uthyBrandId,
+      name: "Product A",
+      slug: `prod-a-${Date.now()}`,
+    });
+
+    const prodB = await catalogService.createProduct(superUser, {
+      brandId: uthyBrandId,
+      name: "Product B",
+      slug: `prod-b-${Date.now()}`,
+    });
+
+    const varB = await catalogService.createVariant(superUser, {
+      productId: prodB.id,
+      sku: `SKU-B-${Date.now()}`,
+    });
+
+    const mediaA = await catalogService.createMedia(superUser, {
+      productId: prodA.id,
+      mediaType: "IMAGE",
+      url: "https://media.verane.com/proda.jpg",
+    });
+
+    await expect(
+      catalogService.updateMedia(superUser, mediaA.id, {
+        variantId: varB.id,
+      })
+    ).rejects.toThrow(ValidationError);
+  });
+
+  // Extra PR #4 checks: Collection reorder validation
+  it("should validate collection reordering for nonexistent products and non-member products", async () => {
+    const coll = await catalogService.createCollection(superUser, {
+      brandId: uthyBrandId,
+      name: "Couture Rail",
+      slug: `couture-rail-${Date.now()}`,
+    });
+
+    const prod1 = await catalogService.createProduct(superUser, {
+      brandId: uthyBrandId,
+      name: "Rail Item 1",
+      slug: `rail-item-1-${Date.now()}`,
+    });
+
+    const prod2 = await catalogService.createProduct(superUser, {
+      brandId: uthyBrandId,
+      name: "Rail Item 2",
+      slug: `rail-item-2-${Date.now()}`,
+    });
+
+    await catalogService.addProductToCollection(superUser, coll.id, prod1.id);
+
+    // Nonexistent product -> NotFoundError
+    await expect(
+      catalogService.reorderCollectionProducts(superUser, coll.id, [
+        { productId: "nonexistent_prod_id", position: 0 },
+      ])
+    ).rejects.toThrow(NotFoundError);
+
+    // Non-member product -> ValidationError
+    await expect(
+      catalogService.reorderCollectionProducts(superUser, coll.id, [
+        { productId: prod2.id, position: 0 },
+      ])
+    ).rejects.toThrow(ValidationError);
   });
 });

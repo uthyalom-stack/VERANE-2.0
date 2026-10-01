@@ -135,8 +135,12 @@ export class CatalogService {
     }
 
     if (userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, product.brandId);
-      if (!hasAccess) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.PRODUCTS_READ,
+        product.brandId
+      );
+      if (!hasPerm) {
         throw new ForbiddenError("Not authorized to view products for this brand");
       }
     }
@@ -151,8 +155,12 @@ export class CatalogService {
     }
 
     if (userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, product.brandId);
-      if (!hasAccess) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.PRODUCTS_READ,
+        product.brandId
+      );
+      if (!hasPerm) {
         throw new ForbiddenError("Not authorized to view products for this brand");
       }
     }
@@ -164,16 +172,33 @@ export class CatalogService {
     userAuth: AuthenticatedUser | null,
     filters?: { brandId?: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED"; categoryId?: string }
   ): Promise<Product[]> {
-    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+    if (userAuth && userAuth.adminProfile) {
+      const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
 
-    if (authorizedBrandIds !== null) {
-      if (filters?.brandId) {
-        if (!authorizedBrandIds.includes(filters.brandId)) {
-          throw new ForbiddenError("Not authorized to list products for this brand");
+      if (authorizedBrandIds !== null) {
+        if (filters?.brandId) {
+          const hasPerm = await this.authService.hasBrandPermission(
+            userAuth,
+            PERMISSIONS.PRODUCTS_READ,
+            filters.brandId
+          );
+          if (!hasPerm) {
+            throw new ForbiddenError("Not authorized to list products for this brand");
+          }
+          return this.catalogRepo.listProducts({ ...filters, brandId: filters.brandId });
         }
-        return this.catalogRepo.listProducts({ ...filters, brandId: filters.brandId });
+
+        // Verify products.read permission for assigned brands
+        const readableBrandIds: string[] = [];
+        for (const bId of authorizedBrandIds) {
+          const hasPerm = await this.authService.hasBrandPermission(userAuth, PERMISSIONS.PRODUCTS_READ, bId);
+          if (hasPerm) readableBrandIds.push(bId);
+        }
+        if (readableBrandIds.length === 0) {
+          throw new ForbiddenError("Not authorized to read products");
+        }
+        return this.catalogRepo.listProducts({ ...filters, brandId: readableBrandIds });
       }
-      return this.catalogRepo.listProducts({ ...filters, brandId: authorizedBrandIds });
     }
 
     return this.catalogRepo.listProducts(filters);
@@ -327,8 +352,12 @@ export class CatalogService {
     }
 
     if (userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, parentProduct.brandId);
-      if (!hasAccess) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.PRODUCTS_READ,
+        parentProduct.brandId
+      );
+      if (!hasPerm) {
         throw new ForbiddenError("Not authorized to list variants for this brand");
       }
     }
@@ -449,6 +478,10 @@ export class CatalogService {
       if (!parent) {
         throw new NotFoundError("Parent category not found");
       }
+      // Verify child category brand matches parent category brand (or parent is global)
+      if (validated.brandId && parent.brandId && parent.brandId !== validated.brandId) {
+        throw new ForbiddenError("Child category brand must match parent category brand");
+      }
     }
 
     const category = await this.catalogRepo.createCategory({
@@ -479,16 +512,32 @@ export class CatalogService {
     userAuth: AuthenticatedUser | null,
     filters?: { brandId?: string; parentId?: string | null }
   ): Promise<Category[]> {
-    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+    if (userAuth && userAuth.adminProfile) {
+      const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
 
-    if (authorizedBrandIds !== null) {
-      if (filters?.brandId) {
-        if (!authorizedBrandIds.includes(filters.brandId)) {
-          throw new ForbiddenError("Not authorized to view categories for this brand");
+      if (authorizedBrandIds !== null) {
+        if (filters?.brandId) {
+          const hasPerm = await this.authService.hasBrandPermission(
+            userAuth,
+            PERMISSIONS.CATEGORIES_READ,
+            filters.brandId
+          );
+          if (!hasPerm) {
+            throw new ForbiddenError("Not authorized to view categories for this brand");
+          }
+          return this.catalogRepo.listCategories({ ...filters, brandId: filters.brandId });
         }
-        return this.catalogRepo.listCategories({ ...filters, brandId: filters.brandId });
+
+        const readableBrandIds: string[] = [];
+        for (const bId of authorizedBrandIds) {
+          const hasPerm = await this.authService.hasBrandPermission(userAuth, PERMISSIONS.CATEGORIES_READ, bId);
+          if (hasPerm) readableBrandIds.push(bId);
+        }
+        if (readableBrandIds.length === 0) {
+          throw new ForbiddenError("Not authorized to read categories");
+        }
+        return this.catalogRepo.listCategories({ ...filters, brandId: readableBrandIds });
       }
-      return this.catalogRepo.listCategories({ ...filters, brandId: authorizedBrandIds });
     }
 
     return this.catalogRepo.listCategories(filters);
@@ -514,6 +563,19 @@ export class CatalogService {
     } else {
       if (!this.authService.isSuperAdmin(userAuth)) {
         throw new ForbiddenError("Only SUPER_ADMIN can update global categories");
+      }
+    }
+
+    if (validated.parentId) {
+      if (validated.parentId === id) {
+        throw new ValidationError("Category cannot be its own parent");
+      }
+      const parent = await this.catalogRepo.findCategoryById(validated.parentId);
+      if (!parent) {
+        throw new NotFoundError("Parent category not found");
+      }
+      if (existing.brandId && parent.brandId && parent.brandId !== existing.brandId) {
+        throw new ForbiddenError("Child category brand must match parent category brand");
       }
     }
 
@@ -625,16 +687,32 @@ export class CatalogService {
     userAuth: AuthenticatedUser | null,
     filters?: { brandId?: string; status?: "DRAFT" | "ACTIVE" | "ARCHIVED" }
   ): Promise<Collection[]> {
-    const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+    if (userAuth && userAuth.adminProfile) {
+      const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
 
-    if (authorizedBrandIds !== null) {
-      if (filters?.brandId) {
-        if (!authorizedBrandIds.includes(filters.brandId)) {
-          throw new ForbiddenError("Not authorized to view collections for this brand");
+      if (authorizedBrandIds !== null) {
+        if (filters?.brandId) {
+          const hasPerm = await this.authService.hasBrandPermission(
+            userAuth,
+            PERMISSIONS.COLLECTIONS_READ,
+            filters.brandId
+          );
+          if (!hasPerm) {
+            throw new ForbiddenError("Not authorized to view collections for this brand");
+          }
+          return this.catalogRepo.listCollections({ ...filters, brandId: filters.brandId });
         }
-        return this.catalogRepo.listCollections({ ...filters, brandId: filters.brandId });
+
+        const readableBrandIds: string[] = [];
+        for (const bId of authorizedBrandIds) {
+          const hasPerm = await this.authService.hasBrandPermission(userAuth, PERMISSIONS.COLLECTIONS_READ, bId);
+          if (hasPerm) readableBrandIds.push(bId);
+        }
+        if (readableBrandIds.length === 0) {
+          throw new ForbiddenError("Not authorized to read collections");
+        }
+        return this.catalogRepo.listCollections({ ...filters, brandId: readableBrandIds });
       }
-      return this.catalogRepo.listCollections({ ...filters, brandId: authorizedBrandIds });
     }
 
     return this.catalogRepo.listCollections(filters);
@@ -829,13 +907,21 @@ export class CatalogService {
       }
     }
 
-    // Verify all products belong to collection's brand if collection is brand-scoped
-    if (collection.brandId) {
-      for (const item of ordering) {
-        const prod = await this.catalogRepo.findProductById(item.productId);
-        if (prod && prod.brandId !== collection.brandId) {
-          throw new ForbiddenError(`Product '${prod.name}' belongs to a different brand than the collection`);
-        }
+    // Fetch current collection product memberships
+    const existingCollectionProducts = await this.catalogRepo.listCollectionProducts(collectionId);
+    const existingProductIds = new Set(existingCollectionProducts.map((item) => item.product.id));
+
+    // Validate complete ordering BEFORE applying updates
+    for (const item of ordering) {
+      const prod = await this.catalogRepo.findProductById(item.productId);
+      if (!prod) {
+        throw new NotFoundError(`Product '${item.productId}' not found`);
+      }
+      if (!existingProductIds.has(item.productId)) {
+        throw new ValidationError(`Product '${prod.name}' is not a member of collection '${collection.name}'`);
+      }
+      if (collection.brandId && prod.brandId !== collection.brandId) {
+        throw new ForbiddenError(`Product '${prod.name}' belongs to a different brand than the collection`);
       }
     }
 
@@ -856,6 +942,25 @@ export class CatalogService {
   // ---------------------------------------------------------------------------
   // INVENTORY
   // ---------------------------------------------------------------------------
+  async listInventory(userAuth: AuthenticatedUser | null) {
+    if (userAuth && userAuth.adminProfile) {
+      const authorizedBrandIds = this.getAuthorizedBrandIds(userAuth);
+      if (authorizedBrandIds !== null) {
+        const readableBrandIds: string[] = [];
+        for (const bId of authorizedBrandIds) {
+          const hasPerm = await this.authService.hasBrandPermission(userAuth, PERMISSIONS.INVENTORY_READ, bId);
+          if (hasPerm) readableBrandIds.push(bId);
+        }
+        if (readableBrandIds.length === 0) {
+          throw new ForbiddenError("Not authorized to read inventory");
+        }
+        return this.catalogRepo.listInventoryWithVariants(readableBrandIds);
+      }
+    }
+
+    return this.catalogRepo.listInventoryWithVariants();
+  }
+
   async adjustInventory(userAuth: AuthenticatedUser, input: AdjustInventoryInput): Promise<Inventory> {
     const validated = AdjustInventorySchema.parse(input);
 
@@ -984,6 +1089,16 @@ export class CatalogService {
       throw new ForbiddenError("Not authorized to update media for this brand");
     }
 
+    if (validated.variantId) {
+      const variant = await this.catalogRepo.findVariantById(validated.variantId);
+      if (!variant) {
+        throw new NotFoundError("Target variant not found");
+      }
+      if (variant.productId !== existing.productId) {
+        throw new ValidationError("Variant does not belong to the product associated with this media asset");
+      }
+    }
+
     const { metadata, ...restFields } = validated;
     const updatePayload: Partial<ProductMedia> = { ...restFields };
     if (metadata !== undefined) {
@@ -1079,8 +1194,12 @@ export class CatalogService {
     }
 
     if (userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, product.brandId);
-      if (!hasAccess) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.MEDIA_READ,
+        product.brandId
+      );
+      if (!hasPerm) {
         throw new ForbiddenError("Not authorized to list media for this brand");
       }
     }
@@ -1100,8 +1219,12 @@ export class CatalogService {
     }
 
     if (userAuth && userAuth.adminProfile) {
-      const hasAccess = await this.authService.hasBrandAccess(userAuth, product.brandId);
-      if (!hasAccess) {
+      const hasPerm = await this.authService.hasBrandPermission(
+        userAuth,
+        PERMISSIONS.MEDIA_READ,
+        product.brandId
+      );
+      if (!hasPerm) {
         throw new ForbiddenError("Not authorized to list media for this brand");
       }
     }

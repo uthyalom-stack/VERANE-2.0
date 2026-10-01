@@ -24,6 +24,13 @@ import {
   NewProductMedia,
 } from "@/infrastructure/database/schema";
 
+export interface InventoryVariantView {
+  inventory: Inventory;
+  variant: ProductVariant;
+  productName: string;
+  brandId: string;
+}
+
 export class CatalogRepository {
   constructor(private db: Database) {}
 
@@ -374,6 +381,26 @@ export class CatalogRepository {
   async getVariantInventory(variantId: string): Promise<Inventory | null> {
     const [inv] = await this.db.select().from(inventory).where(eq(inventory.variantId, variantId));
     return inv || null;
+  }
+
+  async listInventoryWithVariants(brandIds?: string[]): Promise<InventoryVariantView[]> {
+    const query = this.db
+      .select({
+        inventory,
+        variant: productVariants,
+        productName: products.name,
+        brandId: products.brandId,
+      })
+      .from(inventory)
+      .innerJoin(productVariants, eq(inventory.variantId, productVariants.id))
+      .innerJoin(products, eq(productVariants.productId, products.id));
+
+    if (brandIds && brandIds.length > 0) {
+      const rows = await query.where(inArray(products.brandId, brandIds));
+      return rows;
+    }
+
+    return query;
   }
 
   async adjustInventory(
