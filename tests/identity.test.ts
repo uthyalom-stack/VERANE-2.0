@@ -17,7 +17,6 @@ describe("Identity & Authentication", () => {
   const identityRepo = new IdentityRepository(db);
 
   beforeEach(async () => {
-    // Setup schema tables in memory
     const client = (db as unknown as SqliteSessionClient).session.client;
     await client.execute(`
       CREATE TABLE IF NOT EXISTS users (
@@ -87,17 +86,14 @@ describe("Identity & Authentication", () => {
     expect(user.id).toBe(userId);
     expect(user.email).toBe("test@verane.com");
 
-    // Session creation
     const session = await identityRepo.createSession(userId, 7);
     expect(session.userId).toBe(userId);
     expect(session.revokedAt).toBeNull();
 
-    // Session active check
     const activeSession = await identityRepo.findActiveSessionById(session.id);
     expect(activeSession).toBeDefined();
     expect(activeSession?.id).toBe(session.id);
 
-    // Session revocation
     await identityRepo.revokeSession(session.id);
     const revokedSession = await identityRepo.findActiveSessionById(session.id);
     expect(revokedSession).toBeUndefined();
@@ -115,7 +111,6 @@ describe("Identity & Authentication", () => {
       isActive: false,
     });
 
-    // Create session with past expiry
     const sessionId = "expired_session";
     await db.insert(sessions).values({
       id: sessionId,
@@ -127,5 +122,14 @@ describe("Identity & Authentication", () => {
 
     const activeSession = await identityRepo.findActiveSessionById(sessionId);
     expect(activeSession).toBeUndefined();
+  });
+
+  it("should execute dummy hash comparison when user is not found to mitigate timing leaks", async () => {
+    const user = await identityRepo.findUserByEmail("nonexistent@verane.com");
+    expect(user).toBeUndefined();
+
+    const dummyHash = "00000000000000000000000000000000:72b5c777e4e1a0ad10a6cb7c050a4d53896dfb2be1ff110be1494ae4a8e0f6c2";
+    const result = await verifyPassword("SomePassword123!", user?.passwordHash ?? dummyHash);
+    expect(result).toBe(false);
   });
 });

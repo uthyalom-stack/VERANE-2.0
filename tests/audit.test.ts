@@ -32,7 +32,7 @@ describe("Audit Logging", () => {
     `);
   });
 
-  it("should record administrative actions and sanitize sensitive fields in metadata", async () => {
+  it("should record administrative actions and sanitize sensitive fields in metadata including case and snake/camel variants", async () => {
     await auditService.log({
       actorUserId: "admin_123",
       action: "admin.password_reset",
@@ -41,7 +41,16 @@ describe("Audit Logging", () => {
       metadata: {
         reason: "User requested reset",
         password: "NewRawPassword123!",
+        passwordHash: "hash_value_123",
+        password_hash: "hash_value_456",
+        token: "bearer-token-1",
+        accessToken: "access-token-2",
+        access_token: "access-token-3",
         secret: "super-secret-token",
+        authorization: "Bearer secret",
+        apiKey: "api-key-1",
+        api_key: "api-key-2",
+        cookie: "session=123",
         nested: {
           token: "bearer-token-abc",
           safeField: "this is public",
@@ -58,12 +67,21 @@ describe("Audit Logging", () => {
     expect(log.entityId).toBe("target_456");
 
     expect(log.metadata).toBeDefined();
-    const parsedMetadata = JSON.parse(log.metadata!);
+    const parsed = JSON.parse(log.metadata!);
 
-    expect(parsedMetadata.reason).toBe("User requested reset");
-    expect(parsedMetadata.password).toBe("[REDACTED]");
-    expect(parsedMetadata.secret).toBe("[REDACTED]");
-    expect(parsedMetadata.nested.token).toBe("[REDACTED]");
-    expect(parsedMetadata.nested.safeField).toBe("this is public");
+    expect(parsed.reason).toBe("User requested reset");
+    expect(parsed.password).toBe("[REDACTED]");
+    expect(parsed.passwordHash).toBe("[REDACTED]");
+    expect(parsed.password_hash).toBe("[REDACTED]");
+    expect(parsed.token).toBe("[REDACTED]");
+    expect(parsed.accessToken).toBe("[REDACTED]");
+    expect(parsed.access_token).toBe("[REDACTED]");
+    expect(parsed.secret).toBe("[REDACTED]");
+    expect(parsed.authorization).toBe("[REDACTED]");
+    expect(parsed.apiKey).toBe("[REDACTED]");
+    expect(parsed.api_key).toBe("[REDACTED]");
+    expect(parsed.cookie).toBe("[REDACTED]");
+    expect(parsed.nested.token).toBe("[REDACTED]");
+    expect(parsed.nested.safeField).toBe("this is public");
   });
 });

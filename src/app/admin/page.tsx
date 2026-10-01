@@ -1,8 +1,25 @@
-import { requireAdmin } from "@/lib/auth/auth-helpers";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/auth/auth-helpers";
 import { logoutAction } from "@/app/actions/auth";
+import { db } from "@/infrastructure/database/client";
+import { RbacRepository } from "@/domains/rbac/rbac-repository";
+import { BrandRepository } from "@/domains/brands/brand-repository";
+import { AuthorizationService } from "@/domains/identity/authorization-service";
 
 export default async function AdminPage() {
-  const authUser = await requireAdmin();
+  const authUser = await getCurrentUser();
+
+  if (!authUser) {
+    redirect("/login");
+  }
+
+  const rbacRepo = new RbacRepository(db);
+  const brandRepo = new BrandRepository(db);
+  const authService = new AuthorizationService(rbacRepo, brandRepo);
+
+  if (!authService.isAdministrator(authUser)) {
+    redirect("/account");
+  }
 
   return (
     <div className="max-w-3xl mx-auto my-12 p-6 border rounded shadow-sm bg-white text-gray-900">
@@ -25,7 +42,7 @@ export default async function AdminPage() {
       <form action={logoutAction}>
         <button
           type="submit"
-          className="bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition"
+          className="bg-red-600 text-white py-2 px-4 rounded hover:bg-red-700 transition cursor-pointer"
         >
           Sign Out
         </button>

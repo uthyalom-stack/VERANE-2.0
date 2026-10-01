@@ -2,7 +2,36 @@ import { Database } from "@/infrastructure/database/client";
 import { auditLogs } from "@/infrastructure/database/schema";
 import { logger } from "@/lib/logger";
 
-const SENSITIVE_FIELDS = new Set(["password", "token", "secret", "passwordHash", "authorization", "cookie"]);
+const SENSITIVE_KEYS = new Set([
+  "password",
+  "passwordhash",
+  "password_hash",
+  "token",
+  "accesstoken",
+  "access_token",
+  "secret",
+  "authorization",
+  "apikey",
+  "api_key",
+  "cookie",
+]);
+
+function normalizeKey(key: string): string {
+  return key.replace(/[-_]/g, "").toLowerCase();
+}
+
+function isSensitiveKey(key: string): boolean {
+  const normalized = normalizeKey(key);
+  if (SENSITIVE_KEYS.has(key.toLowerCase()) || SENSITIVE_KEYS.has(normalized)) {
+    return true;
+  }
+  for (const sensitiveKey of SENSITIVE_KEYS) {
+    if (normalized.includes(sensitiveKey)) {
+      return true;
+    }
+  }
+  return false;
+}
 
 function sanitizeMetadata(data: unknown): unknown {
   if (data === null || data === undefined) return data;
@@ -14,7 +43,7 @@ function sanitizeMetadata(data: unknown): unknown {
 
   const sanitized: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
-    if (SENSITIVE_FIELDS.has(key)) {
+    if (isSensitiveKey(key)) {
       sanitized[key] = "[REDACTED]";
     } else if (typeof value === "object" && value !== null) {
       sanitized[key] = sanitizeMetadata(value);

@@ -96,7 +96,7 @@ describe("Brand Authorization & RBAC Scoping", () => {
     expect(await authService.hasBrandPermission(authUser, PERMISSIONS.PRODUCTS_UPDATE, BRAND_CODES.UTHY_LUXURY)).toBe(true);
   });
 
-  it("should enforce brand isolation between UTHY_ADMIN and ALOMZIEE_ADMIN", async () => {
+  it("should enforce brand isolation between UTHY_ADMIN and ALOMZIEE_ADMIN and prevent permission unioning", async () => {
     const passwordHash = await hashPassword("Pass123!");
 
     // UTHY Admin setup
@@ -126,12 +126,13 @@ describe("Brand Authorization & RBAC Scoping", () => {
       session: uthySession,
     };
 
-    // Verify UTHY Admin permissions
+    // Verify UTHY Admin permissions for UTHY
     expect(await authService.hasBrandAccess(uthyAuthUser, BRAND_CODES.UTHY_LUXURY)).toBe(true);
     expect(await authService.hasBrandPermission(uthyAuthUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.UTHY_LUXURY)).toBe(true);
 
-    // CROSS-BRAND DENIAL
+    // STRICT CROSS-BRAND DENIAL
     expect(await authService.hasBrandAccess(uthyAuthUser, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
     expect(await authService.hasBrandPermission(uthyAuthUser, PERMISSIONS.PRODUCTS_READ, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
+    expect(await authService.hasBrandPermission(uthyAuthUser, PERMISSIONS.INVENTORY_ADJUST, BRAND_CODES.ALOMZIEE_FOOTIES)).toBe(false);
   });
 });

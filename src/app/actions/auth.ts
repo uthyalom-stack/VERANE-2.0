@@ -7,31 +7,38 @@ import { IdentityRepository } from "@/domains/identity/identity-repository";
 import { AuditService } from "@/domains/audit/audit-service";
 import { verifyPassword } from "@/lib/auth/password";
 import { getSessionCookieConfig } from "@/lib/auth/cookies";
-import { ValidationError, UnauthorizedError } from "@/lib/errors";
 
-export async function loginAction(formData: FormData) {
-  const email = formData.get("email")?.toString();
-  const password = formData.get("password")?.toString();
+export interface AuthState {
+  error?: string;
+}
+
+// Pre-computed PBKDF2 hash for "dummy-password" (100k iterations, salt: 00000000000000000000000000000000)
+const DUMMY_HASH = "00000000000000000000000000000000:72b5c777e4e1a0ad10a6cb7c050a4d53896dfb2be1ff110be1494ae4a8e0f6c2";
+const GENERIC_AUTH_ERROR = "Invalid email or password.";
+
+export async function loginAction(
+  prevState: AuthState | null,
+  formData: FormData
+): Promise<AuthState> {
+  const email = formData.get("email")?.toString()?.trim() || "";
+  const password = formData.get("password")?.toString() || "";
 
   if (!email || !password) {
-    throw new ValidationError("Email and password are required.");
+    return { error: GENERIC_AUTH_ERROR };
   }
 
   const identityRepo = new IdentityRepository(db);
   const auditService = new AuditService(db);
 
   const user = await identityRepo.findUserByEmail(email);
-  if (!user) {
-    throw new UnauthorizedError("Invalid credentials.");
-  }
 
-  if (!user.isActive) {
-    throw new UnauthorizedError("Account is inactive.");
-  }
+  // Constant-time execution: always verify password against user's hash or dummy hash
+  const hashToVerify = user?.passwordHash ?? DUMMY_HASH;
+  const isPasswordValid = await verifyPassword(password, hashToVerify);
 
-  const isValidPassword = await verifyPassword(password, user.passwordHash);
-  if (!isValidPassword) {
-    throw new UnauthorizedError("Invalid credentials.");
+  // Single generic check preventing account enumeration & timing leaks
+  if (!user || !isPasswordValid || !user.isActive) {
+    return { error: GENERIC_AUTH_ERROR };
   }
 
   const session = await identityRepo.createSession(user.id);
