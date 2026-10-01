@@ -1,4 +1,4 @@
-# VÉRANE 2.0 — Architectural Specification (Phase 0)
+# VÉRANE 2.0 — Architectural Specification
 
 VÉRANE is a digital fashion house and ecommerce platform containing two brands:
 - **UTHY LUXURY**
@@ -21,7 +21,7 @@ Cloudflare Workers Runtime (Next.js App Router via @opennextjs/cloudflare)
    ├── Server Actions & Route Handlers
    │       │
    │       ▼
-   ├── Domain Services (Business Logic)
+   ├── Domain Services & Centralized Authorization (AuthorizationService)
    │       │
    │       ▼
    ├── Repositories (Data Abstraction Layer)
@@ -38,99 +38,86 @@ The repository follows a clean modular layout under `src/`:
 
 ```text
 src/
-├── app/                  # Routing, pages, route handlers, server actions
+├── app/                  # Routing, pages, route handlers, server actions (/login, /account, /admin)
 ├── components/           # UI primitives & design system components
 │   └── ui/               # Container, Button, Link, Media
-├── domains/              # Business domain logic (Catalog, Orders, etc.)
+├── domains/              # Business domain logic
+│   ├── identity/         # User identity, session management, AuthorizationService
+│   ├── customers/        # CustomerProfile abstractions
+│   ├── admins/           # AdminProfile abstractions
+│   ├── brands/           # Brand entities (UTHY_LUXURY, ALOMZIEE_FOOTIES)
+│   ├── rbac/             # Roles, Permissions, AdminRoles, RolePermissions
+│   └── audit/            # Audit logging service with sensitive metadata redaction
 ├── infrastructure/       # Database & external providers
-│   ├── database/         # Drizzle connection, schema, repositories
+│   ├── database/         # Drizzle connection, schema, repositories, seed
 │   └── storage/          # R2 storage providers, Worker binding & MediaService
-├── lib/                  # Cross-cutting utilities (security, logging, errors)
+├── lib/                  # Cross-cutting utilities
+│   ├── auth/             # PBKDF2 Web Crypto password hashing, session cookies, auth helpers
+│   ├── security/         # Cookie security defaults
+│   ├── errors/           # Custom error taxonomy (AppError, UnauthorizedError, ForbiddenError)
+│   └── logger/           # Safe logger redacting secret parameters
 └── config/               # Environment & app configuration
 ```
 
 ### Server/Client Boundaries
 
-- **Server-Only Code:** Direct database access, R2 storage provider credentials, and sensitive loggers are guarded with the `"server-only"` package.
+- **Server-Only Code:** Direct database access, R2 storage provider credentials, password hashing, session secrets, and sensitive loggers are guarded with the `"server-only"` package.
 - **Client Code:** UI primitives and interactive React components run without secret imports or direct DB references.
 
 ---
 
-## 3. Database Architecture (Drizzle + Layerbase SQLite)
+## 3. Identity, RBAC & Brand Authorization Architecture (Phase 1)
+
+### Customer vs. Admin Separation
+- **`users`**: Base transactional entity storing email, display name, PBKDF2 password hash, and active status. Passwords are password-hashed using Web Crypto `PBKDF2-HMAC-SHA256` (100,000 iterations, 32-byte key) compatible with Cloudflare Workers.
+- **`customer_profiles`**: Linked 1:1 with `users` for customer-specific state.
+- **`admin_profiles`**: Linked 1:1 with `users` for administrative access. Admin state is required for administrative features. Client-provided roles or tokens are strictly untrusted.
+
+### Server-Authoritative Sessions
+- **`sessions`**: Server-stored session records with unique `id`, `user_id`, `expires_at`, `last_used_at`, and `revoked_at`.
+- **Session Cookies**: Transported via HTTP-only, `SameSite=Lax`, `Path=/`, and production `Secure` cookies (`verane_session`). Session tokens are never exposed in client storage (`localStorage`/`sessionStorage`).
+
+### Role-Based Access Control (RBAC) & Brand Scoping
+- **Entities**: `roles`, `permissions`, `role_permissions`, `admin_roles`.
+- **Predefined Roles**:
+  - `SUPER_ADMIN`: Has global administrative access across all brands. `brand_id` is `null`.
+  - `UTHY_ADMIN`: Has administrative access scoped specifically to `UTHY LUXURY` (`brand_id` points to `brand_uthy_luxury`).
+  - `ALOMZIEE_ADMIN`: Has administrative access scoped specifically to `ALOMZIEE FOOTIES` (`brand_id` points to `brand_alomziee_footies`).
+- **Brand Authorization Enforcement**:
+  - Centralized server-side helpers (`requireUser()`, `requireAdmin()`, `requirePermission()`, `requireBrandAccess()`, `requireBrandPermission()`) enforce authorization on the domain boundary before executing database or mutation operations.
+  - Cross-brand requests by non-Super Admins are rejected server-side with `ForbiddenError`.
+
+### Audit Logging
+- **`audit_logs`**: Captures important administrative actions (`admin.login`, `admin.logout`, `admin.role_changed`, etc.) recording `actor_user_id`, `action`, `entity_type`, `entity_id`, `brand_id`, and `metadata`.
+- **Security & Redaction**: `AuditService` recursively redacts sensitive key fields (`password`, `passwordHash`, `token`, `secret`, `authorization`, `cookie`) prior to persistence.
+
+---
+
+## 4. Database Architecture (Drizzle + Layerbase SQLite)
 
 - **ORM:** Drizzle ORM (`drizzle-orm/libsql`).
 - **Driver:** `@libsql/client` (provides unified support for local SQLite files `file:local.db`, LibSQL wire protocol, and remote Layerbase SQLite instances).
-- **Repository Pattern:** UI components and domain services interact strictly through Repository interfaces (`ISmokeTestRepository`), keeping Drizzle and SQL details isolated inside `src/infrastructure/database/repositories/`.
-
-### Database Environment & Verification Levels
-
-1. **Local Development & Integration Testing:**
-   - Uses local SQLite database (`file:local.db` or `file:test-local.db`).
-   - Verifies Drizzle ORM schema mapping, SQL query execution, and repository abstraction locally without requiring network credentials.
-2. **Layerbase Production Connectivity:**
-   - Uses Layerbase SQLite primary transactional database via `@libsql/client`.
-   - Requires setting `DATABASE_URL` (pointing to the Layerbase HTTP/WebSocket endpoint) and `DATABASE_AUTH_TOKEN` in the server environment.
-   - *Note:* Local integration tests verify driver syntax and repository behavior against LibSQL/SQLite, but actual Layerbase connection requires live environment secrets.
-3. **Migration Workflow:**
-   - Schema changes are defined in `src/infrastructure/database/schema/`.
-   - `npm run db:generate` runs `drizzle-kit generate` to produce declarative SQL files in `./drizzle`.
-   - Migrations are applied via the Drizzle migration runner against target database endpoints.
+- **Repository Pattern:** UI components and domain services interact strictly through Repository interfaces (`IdentityRepository`, `RbacRepository`, `BrandRepository`), keeping Drizzle and SQL details isolated inside `src/infrastructure/database/`.
 
 ---
 
-## 4. Media Storage Strategy (Cloudflare R2)
+## 5. Media Storage Strategy (Cloudflare R2)
 
 The application uses a unified `StorageProvider` abstraction with three explicit execution modes:
-
-### Mode 1: Cloudflare Worker Runtime (Primary Production Target)
-- **Implementation:** `WorkerR2StorageProvider`
-- **Mechanism:** Dynamically resolves the native `MEDIA_BUCKET` binding using `@opennextjs/cloudflare` (`getCloudflareContext()`).
-- **Security & Efficiency:** Direct binding execution; **no S3 access keys or secret keys are required or exposed** in this path.
-
-### Mode 2: Non-Worker Node.js Execution (Standalone / Migration Scripts)
-- **Implementation:** `R2StorageProvider`
-- **Mechanism:** Uses `@aws-sdk/client-s3` targeting Cloudflare R2 endpoints.
-- **Credentials:** Requires `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME`.
-
-### Mode 3: Local Development & Isolated Testing
-- **Implementation:** `MockStorageProvider` or mock `R2BucketBinding`.
-- **Mechanism:** In-memory or local disk storage for isolated development and unit testing without network dependencies.
-
-### Environment Bucket Isolation in Wrangler
-- **Default/Dev:** `verane-media-dev`
-- **Preview:** `verane-media-preview`
-- **Production:** `verane-media-prod`
+1. **Cloudflare Worker Runtime:** `WorkerR2StorageProvider` using native `MEDIA_BUCKET` binding.
+2. **Non-Worker Node.js Execution:** `R2StorageProvider` using S3 API.
+3. **Local Development & Testing:** `MockStorageProvider` or mock `R2BucketBinding`.
 
 ---
 
-## 5. Security & Environment Configuration
-
-- **Env Validation:** `src/config/env.ts` enforces strict validation using Zod for server secrets and public client variables.
-- **Production Secrets:** `SESSION_SECRET` is strictly required in production (`NODE_ENV === "production"` with no default production secret). Development mode uses a documented dev-only fallback.
-- **Custom Error Taxonomy:** `src/lib/errors.ts` standardizes `ValidationError`, `NotFoundError`, `UnauthorizedError`, `ForbiddenError`, and `InfrastructureError`. Stack traces and internal secrets are hidden in production responses.
-- **Safe Logger:** `src/lib/logger.ts` automatically redacts sensitive parameters (`token`, `password`, `secret`, `database_auth_token`, `r2_secret_access_key`).
-- **Secure Cookies:** `src/lib/security.ts` provides default HTTP-only, SameSite=Lax, Secure cookie configuration.
-
----
-
-## 6. Testing Strategy & Verification Levels
+## 6. Testing Strategy & Build Verification
 
 - **Runner:** Vitest.
-- **Environment Tests:** `tests/env.test.ts` verifies strict Zod production validation for `SESSION_SECRET`.
-- **Database Smoke Test:** Local SQLite write -> read -> delete database verification (`tests/database.smoke.test.ts`).
-- **Storage Contract & Factory Test:** Upload -> retrieve -> delete verification for both Mock and Worker R2 binding mock contract (`tests/storage.smoke.test.ts`).
-- **API & Security Smoke Test:** Validation and error formatting verification (`tests/api.smoke.test.ts`).
-
----
-
-## 7. Explicit Verification Status & Manual Requirements
-
-- **Verified Locally:**
-  - Next.js 16 build & TypeScript compilation.
-  - Vitest test suite (12 tests across 4 files: environment validation, repository pattern, database smoke test, storage abstraction, worker R2 binding contract mock, factory provider resolution).
-  - OpenNext Cloudflare Workers build (`npm run cf:build`).
-  - ESLint verification.
-  - VÉRANE foundation status page and metadata.
-- **Requires Live Deployment Credentials (Manual Setup):**
-  - **Layerbase Database:** Live `DATABASE_URL` and `DATABASE_AUTH_TOKEN` must be configured in Cloudflare Worker environment variables for production database access.
-  - **Cloudflare R2 Buckets:** Cloudflare dashboard buckets (`verane-media-dev`, `verane-media-preview`, `verane-media-prod`) must be provisioned in the Cloudflare dashboard.
+- **Suite**:
+  - Environment validation (`tests/env.test.ts`)
+  - Storage provider contracts (`tests/storage.smoke.test.ts`)
+  - API & Error formatting (`tests/api.smoke.test.ts`)
+  - Database smoke tests (`tests/database.smoke.test.ts`)
+  - Identity & PBKDF2 password hashing & session lifecycle (`tests/identity.test.ts`)
+  - Brand authorization & RBAC scoping & cross-brand denial (`tests/brand-authorization.test.ts`)
+  - Audit logging & sensitive field redaction (`tests/audit.test.ts`)
