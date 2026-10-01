@@ -70,7 +70,7 @@ src/
 2. **Layerbase Production Connectivity:**
    - Uses Layerbase SQLite primary transactional database via `@libsql/client`.
    - Requires setting `DATABASE_URL` (pointing to the Layerbase HTTP/WebSocket endpoint) and `DATABASE_AUTH_TOKEN` in the server environment.
-   - *Note:* Local integration tests verify the driver abstraction and repository behavior against LibSQL/SQLite, but actual Layerbase connection requires live environment secrets.
+   - *Note:* Local integration tests verify driver syntax and repository behavior against LibSQL/SQLite, but actual Layerbase connection requires live environment secrets.
 3. **Migration Workflow:**
    - Schema changes are defined in `src/infrastructure/database/schema/`.
    - `npm run db:generate` runs `drizzle-kit generate` to produce declarative SQL files in `./drizzle`.
@@ -80,15 +80,26 @@ src/
 
 ## 4. Media Storage Strategy (Cloudflare R2)
 
-- **Provider Abstraction:** `StorageProvider` interface defining `upload`, `retrieve`, `delete`, and `getPublicUrl`.
-- **Worker R2 Binding Provider:** `WorkerR2StorageProvider` uses the native Cloudflare Worker `MEDIA_BUCKET` binding without requiring S3 API keys inside the Worker runtime.
-- **S3 API Provider:** `R2StorageProvider` uses `@aws-sdk/client-s3` for non-Worker node environments.
-- **Local Fallback:** `MockStorageProvider` for isolated local development and test execution.
-- **Factory:** `createStorageProvider()` dynamically selects the appropriate provider based on execution environment.
-- **Environment Isolation in Wrangler:**
-  - Default/Dev: `verane-media-dev`
-  - Preview: `verane-media-preview`
-  - Production: `verane-media-prod`
+The application uses a unified `StorageProvider` abstraction with three explicit execution modes:
+
+### Mode 1: Cloudflare Worker Runtime (Primary Production Target)
+- **Implementation:** `WorkerR2StorageProvider`
+- **Mechanism:** Dynamically resolves the native `MEDIA_BUCKET` binding using `@opennextjs/cloudflare` (`getCloudflareContext()`).
+- **Security & Efficiency:** Direct binding execution; **no S3 access keys or secret keys are required or exposed** in this path.
+
+### Mode 2: Non-Worker Node.js Execution (Standalone / Migration Scripts)
+- **Implementation:** `R2StorageProvider`
+- **Mechanism:** Uses `@aws-sdk/client-s3` targeting Cloudflare R2 endpoints.
+- **Credentials:** Requires `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, and `R2_BUCKET_NAME`.
+
+### Mode 3: Local Development & Isolated Testing
+- **Implementation:** `MockStorageProvider` or mock `R2BucketBinding`.
+- **Mechanism:** In-memory or local disk storage for isolated development and unit testing without network dependencies.
+
+### Environment Bucket Isolation in Wrangler
+- **Default/Dev:** `verane-media-dev`
+- **Preview:** `verane-media-preview`
+- **Production:** `verane-media-prod`
 
 ---
 
@@ -102,12 +113,12 @@ src/
 
 ---
 
-## 6. Testing Strategy
+## 6. Testing Strategy & Verification Levels
 
 - **Runner:** Vitest.
 - **Environment Tests:** `tests/env.test.ts` verifies strict Zod production validation for `SESSION_SECRET`.
-- **Database Smoke Test:** Real local SQLite write -> read -> delete database verification (`tests/database.smoke.test.ts`).
-- **Storage Smoke Test:** Upload -> retrieve -> delete verification for both Mock and Worker R2 bindings (`tests/storage.smoke.test.ts`).
+- **Database Smoke Test:** Local SQLite write -> read -> delete database verification (`tests/database.smoke.test.ts`).
+- **Storage Contract & Factory Test:** Upload -> retrieve -> delete verification for both Mock and Worker R2 binding mock contract (`tests/storage.smoke.test.ts`).
 - **API & Security Smoke Test:** Validation and error formatting verification (`tests/api.smoke.test.ts`).
 
 ---
@@ -116,10 +127,10 @@ src/
 
 - **Verified Locally:**
   - Next.js 16 build & TypeScript compilation.
-  - Vitest test suite (environment validation, repository pattern, database smoke test, storage abstraction, worker R2 binding mock).
+  - Vitest test suite (12 tests across 4 files: environment validation, repository pattern, database smoke test, storage abstraction, worker R2 binding contract mock, factory provider resolution).
   - OpenNext Cloudflare Workers build (`npm run cf:build`).
   - ESLint verification.
-  - VÉRANE foundation homepage and metadata.
+  - VÉRANE foundation status page and metadata.
 - **Requires Live Deployment Credentials (Manual Setup):**
   - **Layerbase Database:** Live `DATABASE_URL` and `DATABASE_AUTH_TOKEN` must be configured in Cloudflare Worker environment variables for production database access.
-  - **Cloudflare R2 Buckets:** Cloudflare dashboard buckets (`verane-media-dev`, `verane-media-preview`, `verane-media-prod`) must be provisioned and bound in Cloudflare.
+  - **Cloudflare R2 Buckets:** Cloudflare dashboard buckets (`verane-media-dev`, `verane-media-preview`, `verane-media-prod`) must be provisioned in the Cloudflare dashboard.
