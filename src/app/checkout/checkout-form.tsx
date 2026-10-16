@@ -54,7 +54,7 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
         <div className="mt-4">{chosen ? <Totals view={{ ...view, pricing: { ...view.pricing, shippingTotal: chosen.amountMinor, total: chosen.total } }} /> : <Totals view={view} />}</div>
         <p role="alert" className="mt-4 min-h-5 text-sm text-red-400">{err}</p>
         <Button className="mt-2 w-full" onClick={pay} disabled={!chosen || pending}>{pending ? "Starting payment…" : chosen ? `Pay ${formatMoney(chosen.total, view.currency)}` : "Choose delivery to continue"}</Button>
-        <p className="mt-3 text-xs text-muted">You'll complete payment securely with Paystack. Totals are confirmed by our server before you pay.</p></aside>
+        <p className="mt-3 text-xs text-muted">You&apos;ll complete payment securely with Paystack. Totals are confirmed by our server before you pay.</p></aside>
     </div>
   );
 }
