@@ -8,7 +8,7 @@ function arrayBufferToHex(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let hex = "";
   for (let i = 0; i < bytes.length; i++) {
-    hex += bytes[i].toString(16).padStart(2, "0");
+    hex += (bytes[i] ?? 0).toString(16).padStart(2, "0");
   }
   return hex;
 }
@@ -54,6 +54,7 @@ export async function verifyPassword(password: string, storedHash: string): Prom
   if (parts.length !== 2) return false;
 
   const [saltHex, expectedHashHex] = parts;
+  if (!saltHex || !expectedHashHex) return false;
   const salt = hexToArrayBuffer(saltHex);
   const encoder = new TextEncoder();
 
