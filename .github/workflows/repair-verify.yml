@@ -1,0 +1,66 @@
+name: Repair branch verification
+
+on:
+  push:
+    branches:
+      - fix/storefront-schema-repair
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/storefront-schema-repair
+          persist-credentials: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate schema migration from the committed Drizzle schema
+        run: npm run db:generate
+
+      - name: Commit generated migration if needed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if ! git diff --quiet -- drizzle; then
+            git add drizzle
+            git commit -m "fix(db): generate missing storefront schema migration"
+            git push origin HEAD:fix/storefront-schema-repair
+          else
+            echo "Drizzle schema is already in sync with migration snapshots."
+          fi
+
+      - name: Run project checks
+        id: project-check
+        continue-on-error: true
+        run: npm run check
+
+      - name: Run offline tests
+        id: offline-tests
+        if: always()
+        continue-on-error: true
+        run: npm run test:offline
+
+      - name: Summarize verification
+        if: always()
+        run: |
+          {
+            echo "## Repair branch verification"
+            echo "- npm run check: ${{ steps.project-check.outcome }}"
+            echo "- npm run test:offline: ${{ steps.offline-tests.outcome }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.project-check.outcome }}" != "success" ] || [ "${{ steps.offline-tests.outcome }}" != "success" ]; then
+            exit 1
+          fi
