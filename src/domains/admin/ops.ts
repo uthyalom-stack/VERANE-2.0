@@ -23,7 +23,7 @@ export async function createAdminUser(db: Db, actor: Actor, raw: { email: string
   const email = z.string().email().parse(raw.email).toLowerCase(); const name = z.string().trim().min(2).max(80).parse(raw.name);
   const tempPassword = randomToken(9); // shown once to the creating super admin; user must reset
   const id = crypto.randomUUID();
-  try { await db.transaction(async (tx) => { await tx.insert(users).values({ id, email, passwordHash: await hashPassword(tempPassword), kind: "admin", emailVerifiedAt: new Date() }); await tx.insert(adminProfiles).values({ userId: id, displayName: name }); }); }
+  try { await db.transaction(async (tx) => { await tx.insert(users).values({ id, email, name, isActive: true, passwordHash: await hashPassword(tempPassword), kind: "admin", emailVerifiedAt: new Date(), createdAt: new Date(), updatedAt: new Date() }); await tx.insert(adminProfiles).values({ id: crypto.randomUUID(), userId: id, displayName: name, createdAt: new Date(), updatedAt: new Date() }); }); }
   catch (e) { if (String(e).includes("UNIQUE")) throw new AppError("CONFLICT", "That email is already registered"); throw e; }
   await writeAudit(db, { actorUserId: actor.userId, action: "user.create", entityType: "user", entityId: id, after: { email } });
   return { id, tempPassword };
