@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex, primaryKey } from "drizzle-orm/sqlite-core";
 import { createdAt, id, ts, updatedAt } from "./_helpers";
 import { brands } from "./catalog";
@@ -7,46 +8,52 @@ export const users = sqliteTable(
   {
     id: id(),
     email: text().notNull(),
+    name: text().notNull(), // retained from the original migration; always supplied by registration/seed
+    isActive: integer({ mode: "boolean" }).notNull().default(true),
     emailVerifiedAt: ts(),
     passwordHash: text().notNull(),
     kind: text({ enum: ["customer", "admin"] }).notNull().default("customer"),
     status: text({ enum: ["active", "suspended", "deleted"] }).notNull().default("active"),
     failedLoginCount: integer().notNull().default(0),
     lockedUntil: ts(),
-    createdAt: createdAt(),
-    updatedAt: updatedAt(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+    updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
   },
-  (t) => [uniqueIndex("users_email_uq").on(t.email)],
+  (t) => [uniqueIndex("users_email_unique").on(t.email)],
 );
 
 export const customerProfiles = sqliteTable("customer_profiles", {
-  userId: text().primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  firstName: text().notNull(),
-  lastName: text().notNull(),
+  id: id(),
+  userId: text().notNull().references(() => users.id, { onDelete: "cascade" }),
+  firstName: text().notNull().default(""),
+  lastName: text().notNull().default(""),
   phone: text(),
   preferredBrandId: text().references(() => brands.id, { onDelete: "set null" }),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
-});
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
+}, (t) => [uniqueIndex("customer_profiles_user_id_unique").on(t.userId)]);
 
 export const adminProfiles = sqliteTable("admin_profiles", {
-  userId: text().primaryKey().references(() => users.id, { onDelete: "cascade" }),
-  displayName: text().notNull(),
-  createdAt: createdAt(),
-});
+  id: id(),
+  userId: text().notNull().references(() => users.id, { onDelete: "cascade" }),
+  displayName: text().notNull().default(""),
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
+}, (t) => [uniqueIndex("admin_profiles_user_id_unique").on(t.userId)]);
 
 export const sessions = sqliteTable(
   "sessions",
   {
     id: id(),
     userId: text().notNull().references(() => users.id, { onDelete: "cascade" }),
-    tokenHash: text().notNull(), // SHA-256 of the opaque cookie token; raw token is never stored
+    tokenHash: text(), // SHA-256 of the opaque cookie token; nullable only for rows from the legacy schema
     expiresAt: integer({ mode: "timestamp_ms" }).notNull(),
-    lastSeenAt: integer({ mode: "timestamp_ms" }).notNull(),
+    lastUsedAt: integer({ mode: "timestamp_ms" }).notNull(),
+    lastSeenAt: integer({ mode: "timestamp_ms" }).notNull().default(sql`0`),
     ipHash: text(),
     userAgent: text(),
     revokedAt: ts(),
-    createdAt: createdAt(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
   },
   (t) => [uniqueIndex("sessions_token_uq").on(t.tokenHash), index("sessions_user_idx").on(t.userId)],
 );
@@ -77,17 +84,22 @@ export const rateLimitHits = sqliteTable(
 
 export const roles = sqliteTable("roles", {
   id: id(),
-  code: text().notNull().unique(), // SUPER_ADMIN | UTHY_ADMIN | ALOMZIEE_ADMIN | ...
+  code: text().unique(), // nullable for pre-existing legacy rows; seeded roles always receive a code
   name: text().notNull(),
   description: text(),
   isSystem: integer({ mode: "boolean" }).notNull().default(true),
-});
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
+}, (t) => [uniqueIndex("roles_name_unique").on(t.name)]);
 
 export const permissions = sqliteTable("permissions", {
   id: id(),
-  code: text().notNull().unique(), // e.g. catalog.product.write
+  name: text().notNull(), // retained from the original migration
+  code: text().unique(), // legacy rows may be null until reconciled; new rows always receive a code
   description: text(),
-});
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
+}, (t) => [uniqueIndex("permissions_name_unique").on(t.name)]);
 
 export const rolePermissions = sqliteTable(
   "role_permissions",
@@ -97,6 +109,17 @@ export const rolePermissions = sqliteTable(
   },
   (t) => [primaryKey({ columns: [t.roleId, t.permissionId] })],
 );
+
+
+
+/** Legacy RBAC assignments are retained so forward migrations preserve the original table and its data. */
+export const adminRoles = sqliteTable("admin_roles", {
+  id: id(),
+  adminProfileId: text().notNull().references(() => adminProfiles.id, { onDelete: "cascade" }),
+  roleId: text().notNull().references(() => roles.id, { onDelete: "cascade" }),
+  brandId: text().references(() => brands.id, { onDelete: "cascade" }),
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+});
 
 /** brandId NULL = global grant (SUPER_ADMIN). Brand admins always carry a non-null brandId. */
 export const userRoles = sqliteTable(
