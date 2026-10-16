@@ -62,6 +62,7 @@ describe("Audit Logging", () => {
     expect(logs.length).toBe(1);
 
     const log = logs[0];
+    if (!log) throw new Error("Expected audit log to be written");
     expect(log.actorUserId).toBe("admin_123");
     expect(log.entityType).toBe("user");
     expect(log.entityId).toBe("target_456");

@@ -6,7 +6,8 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   children: React.ReactNode;
 }
 
-export function Button({
+/** Legacy design-system button retained for existing barrel imports. */
+export function LegacyButton({
   variant = "primary",
   size = "md",
   children,

@@ -18,9 +18,14 @@ const dupe = (e: unknown, msg: string) => { if (String(e).includes("UNIQUE")) th
 /* ---------- Looks ---------- */
 const lookSchema = z.object({ brandId: z.string().min(1), title: z.string().trim().min(2).max(120), slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(), description: z.string().max(2000).nullable().optional(), stylingNotes: z.string().max(1000).nullable().optional(), imageMediaId: optId, status, publishAt: nullableDate, sortOrder: z.coerce.number().int().default(0), seoTitle: z.string().max(70).nullable().optional(), seoDescription: z.string().max(170).nullable().optional() });
 export async function saveLook(db: Db, actor: Actor, raw: unknown, id?: string) {
-  const l = lookSchema.parse(raw); let existingBrand: string | null | undefined;
+  let existingBrand: string | null | undefined;
   if (id) { const [ex] = await db.select().from(looks).where(eq(looks.id, id)); if (!ex) throw new AppError("NOT_FOUND", "Look not found"); existingBrand = ex.brandId; }
-  await guard(actor, "content.write", existingBrand, l.brandId);
+  const candidateBrandId = raw && typeof raw === "object" && "brandId" in raw && typeof (raw as { brandId?: unknown }).brandId === "string"
+    ? (raw as { brandId: string }).brandId
+    : null;
+  if (existingBrand !== undefined) assertCan(actor, "content.write", existingBrand);
+  assertCan(actor, "content.write", candidateBrandId);
+  const l = lookSchema.parse(raw);
   const row = { brandId: l.brandId, title: l.title, slug: l.slug ?? slugify(l.title), description: l.description ?? null, stylingNotes: l.stylingNotes ?? null, imageMediaId: l.imageMediaId, status: l.status, publishAt: l.publishAt ?? null, sortOrder: l.sortOrder, seoTitle: l.seoTitle ?? null, seoDescription: l.seoDescription ?? null };
   try { if (id) await db.update(looks).set(row).where(eq(looks.id, id)); else id = (await db.insert(looks).values(row).returning())[0]!.id; } catch (e) { dupe(e, "A look with that slug exists"); }
   await writeAudit(db, { actorUserId: actor.userId, action: "look.save", entityType: "look", entityId: id!, brandId: l.brandId, after: row });
@@ -88,7 +93,16 @@ export async function getOrCreateHome(db: Db, actor: Actor) {
 export async function savePageBlocks(db: Db, actor: Actor, pageId: string, input: { status: "draft" | "published"; blocks: Array<{ type: string; data: unknown; isVisible?: boolean }> }) {
   const [p] = await db.select().from(pages).where(eq(pages.id, pageId)); if (!p) throw new AppError("NOT_FOUND", "Page not found");
   assertCan(actor, "content.write", p.brandId);
-  const clean = input.blocks.map((b) => { const s = BLOCK_SCHEMAS[b.type as BlockType]; if (!s) throw new AppError("VALIDATION", `Unknown block type: ${b.type}`); return { type: b.type, data: s.parse(b.data ?? {}) as Record<string, unknown>, isVisible: b.isVisible ?? true }; });
+  const clean = input.blocks.map((b) => {
+    const s = BLOCK_SCHEMAS[b.type as BlockType];
+    if (!s) throw new AppError("VALIDATION", `Unknown block type: ${b.type}`);
+    try {
+      return { type: b.type, data: s.parse(b.data ?? {}) as Record<string, unknown>, isVisible: b.isVisible ?? true };
+    } catch (error) {
+      if (error instanceof z.ZodError) throw new AppError("VALIDATION", error.issues[0]?.message ?? "Invalid page block data");
+      throw error;
+    }
+  });
   await db.transaction(async (tx) => { await tx.delete(pageBlocks).where(eq(pageBlocks.pageId, pageId)); for (const [i, b] of clean.entries()) await tx.insert(pageBlocks).values({ pageId, sortOrder: i, type: b.type, data: b.data, isVisible: b.isVisible }); await tx.update(pages).set({ status: input.status }).where(eq(pages.id, pageId)); });
   await writeAudit(db, { actorUserId: actor.userId, action: "page.blocks", entityType: "page", entityId: pageId, brandId: p.brandId, after: { status: input.status, blocks: clean.length } });
 }

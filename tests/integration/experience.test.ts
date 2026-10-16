@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { sha256Hex } from "@/lib/crypto";
 import { makeTestDb, seedBrandsAndActors } from "../helpers";
 import { createProduct } from "@/domains/catalog/admin";
 import { addToCart, getOrCreateCart } from "@/domains/cart";
@@ -26,12 +27,12 @@ beforeAll(async () => {
   const r = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Exp Dress", basePrice: 1_000_000, status: "published", variants: [{ sku: "EXP-1", size: "M", initialStock: 10 }] });
   productId = r.id; variantId = (await ctx.db.select().from(productVariants).where(eq(productVariants.productId, r.id)))[0]!.id;
   const [cat] = await ctx.db.insert(categories).values({ slug: "dresses", name: "Dresses", kind: "clothing" }).returning(); await ctx.db.insert(productCategories).values({ productId, categoryId: cat!.id });
-  me = (await ctx.db.insert(users).values({ email: "me@t.dev", passwordHash: "x" }).returning())[0]!.id; otherUser = (await ctx.db.insert(users).values({ email: "o@t.dev", passwordHash: "x" }).returning())[0]!.id;
+  me = (await ctx.db.insert(users).values({ email: "me@t.dev", name: "Me", isActive: true, passwordHash: "x", createdAt: new Date(), updatedAt: new Date() }).returning())[0]!.id; otherUser = (await ctx.db.insert(users).values({ email: "o@t.dev", name: "Other", isActive: true, passwordHash: "x", createdAt: new Date(), updatedAt: new Date() }).returning())[0]!.id;
 });
 afterAll(() => ctx.cleanup());
 
 async function paidOrder(email = "buyer@t.dev", userId: string | null = null) {
-  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: crypto.randomUUID() }); await addToCart(ctx.db, cart.id, variantId, 1);
+  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) }); await addToCart(ctx.db, cart.id, variantId, 1);
   const r = await startCheckout(ctx.db, createMockPaymentProvider({ secret: "s" }), { cartId: cart.id, userId, email, phone: "08012345678", address, shipping, callbackUrl: "http://x/cb" }, new Date(), { pepper: PEPPER });
   return r;
 }

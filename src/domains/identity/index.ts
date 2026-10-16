@@ -24,8 +24,8 @@ export async function registerCustomer(db: Db, raw: unknown, pepper: string) {
   try {
     const userId = crypto.randomUUID();
     await db.transaction(async (tx) => {
-      await tx.insert(users).values({ id: userId, email: input.email, passwordHash, kind: "customer" });
-      await tx.insert(customerProfiles).values({ userId, firstName: input.firstName, lastName: input.lastName });
+      await tx.insert(users).values({ id: userId, email: input.email, name: `${input.firstName} ${input.lastName}`, isActive: true, passwordHash, kind: "customer", createdAt: new Date(), updatedAt: new Date() });
+      await tx.insert(customerProfiles).values({ id: crypto.randomUUID(), userId, firstName: input.firstName, lastName: input.lastName, createdAt: new Date(), updatedAt: new Date() });
     });
     const verifyToken = await issueOneTimeToken(db, userId, "verify_email", 24 * 3600_000, pepper);
     return { userId, verifyToken };
@@ -42,9 +42,9 @@ export async function registerCustomer(db: Db, raw: unknown, pepper: string) {
 export async function rateLimit(db: Db, bucket: string, max: number, windowMs: number, now = Date.now()): Promise<boolean> {
   const since = now - windowMs;
   const [{ n } = { n: 0 }] = await db.select({ n: sql<number>`count(*)` }).from(rateLimitHits)
-    .where(and(eq(rateLimitHits.bucket, bucket), gt(rateLimitHits.at, since)));
+    .where(and(eq(rateLimitHits.bucket, bucket), gt(rateLimitHits.at, new Date(since))));
   if (n >= max) return false;
-  await db.insert(rateLimitHits).values({ bucket, at: now });
+  await db.insert(rateLimitHits).values({ bucket, at: new Date(now) });
   return true;
 }
 
@@ -72,7 +72,7 @@ export async function createSession(db: Db, userId: string, pepper: string, meta
   const token = randomToken(32);
   const now = Date.now();
   await db.insert(sessions).values({
-    userId, tokenHash: await sha256Hex(token, pepper), expiresAt: new Date(now + SESSION_TTL_MS), lastSeenAt: new Date(now),
+    id: crypto.randomUUID(), userId, tokenHash: await sha256Hex(token, pepper), expiresAt: new Date(now + SESSION_TTL_MS), lastUsedAt: new Date(now), lastSeenAt: new Date(now), createdAt: new Date(now),
     ipHash: meta.ip ? await sha256Hex(meta.ip, pepper) : null, userAgent: meta.userAgent?.slice(0, 200) ?? null,
   });
   return { token, expiresAt: new Date(now + SESSION_TTL_MS) };

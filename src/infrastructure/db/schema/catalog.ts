@@ -8,10 +8,10 @@ export const brands = sqliteTable("brands", {
   name: text().notNull(),
   tagline: text(),
   description: text(),
-  themeKey: text().notNull(), // maps to design-system theme
+  themeKey: text().notNull().default("default"), // maps to design-system theme
   isActive: integer({ mode: "boolean" }).notNull().default(true),
-  createdAt: createdAt(),
-  updatedAt: updatedAt(),
+  createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull(),
 });
 
 export const categories = sqliteTable(

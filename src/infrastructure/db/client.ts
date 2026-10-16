@@ -5,10 +5,18 @@ import { getEnv } from "@/lib/env";
 
 export type Db = LibSQLDatabase<typeof schema>;
 
+const localDbInstances = new WeakSet<object>();
+/** True only for embedded SQLite connections; remote libSQL writes must remain concurrent. */
+export function isLocalDb(db: Db): boolean {
+  return localDbInstances.has(db as object);
+}
+
 export function createDb(url: string, authToken?: string): { db: Db; client: Client } {
   // `@libsql/client` resolves to the web/HTTP build under the `workerd` export condition.
   const client = createClient({ url, authToken: authToken || undefined });
-  return { db: drizzle(client, { schema, casing: "snake_case" }), client };
+  const db = drizzle(client, { schema, casing: "snake_case" });
+  if (url.startsWith("file:")) localDbInstances.add(db as object);
+  return { db, client };
 }
 
 let singleton: Db | undefined;

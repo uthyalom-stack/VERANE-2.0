@@ -17,11 +17,11 @@ export async function makeTestDb() {
 }
 
 export async function seedBrandsAndActors(db: Awaited<ReturnType<typeof makeTestDb>>["db"]) {
-  const [uthy] = await db.insert(s.brands).values({ code: "UTHY_LUXURY", slug: "uthy-luxury", name: "UTHY LUXURY", themeKey: "uthy" }).returning();
-  const [alo] = await db.insert(s.brands).values({ code: "ALOMZIEE_FOOTIES", slug: "alomziee-footies", name: "ALOMZIEE FOOTIES", themeKey: "alomzie" }).returning();
-  const roles = Object.fromEntries((await db.select().from(s.roles)).map((r) => [r.code, r.id]));
+  const [uthy] = await db.insert(s.brands).values({ code: "UTHY_LUXURY", slug: "uthy-luxury", name: "UTHY LUXURY", themeKey: "uthy", createdAt: new Date(), updatedAt: new Date() }).returning();
+  const [alo] = await db.insert(s.brands).values({ code: "ALOMZIEE_FOOTIES", slug: "alomziee-footies", name: "ALOMZIEE FOOTIES", themeKey: "alomzie", createdAt: new Date(), updatedAt: new Date() }).returning();
+  const roles = Object.fromEntries((await db.select().from(s.roles)).map((r) => [r.code ?? "", r.id]));
   async function mk(email: string, role: string, brandId: string | null) {
-    const [u] = await db.insert(s.users).values({ email, passwordHash: await hashPassword("password-123456"), kind: "admin" }).returning();
+    const [u] = await db.insert(s.users).values({ email, name: email.split("@")[0]!, isActive: true, passwordHash: await hashPassword("password-123456"), kind: "admin", createdAt: new Date(), updatedAt: new Date() }).returning();
     await db.insert(s.userRoles).values({ userId: u!.id, roleId: roles[role]!, brandId });
     return loadActor(db, u!.id);
   }

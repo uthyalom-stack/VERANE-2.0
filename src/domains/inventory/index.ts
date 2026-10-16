@@ -1,5 +1,5 @@
 import { eq, inArray, sql } from "drizzle-orm";
-import type { Db } from "@/infrastructure/db/client";
+import { isLocalDb, type Db } from "@/infrastructure/db/client";
 import { inventoryLevels, inventoryTransactions, productVariants, products } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { assertCan, type Actor } from "@/domains/authorization";
@@ -9,6 +9,40 @@ export type StockLine = { variantId: string; quantity: number };
 type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const affected = (r: unknown): number => (r as { rowsAffected?: number }).rowsAffected ?? 0;
+
+function isSqliteBusy(error: unknown): boolean {
+  const e = error as { code?: string; rawCode?: number; message?: string };
+  return e?.code === "SQLITE_BUSY" || e?.rawCode === 5 || /database is locked/i.test(e?.message ?? "");
+}
+
+
+async function inventoryWrite<T>(db: Db, work: () => Promise<T>): Promise<T> {
+  if (!isLocalDb(db)) return retryBusy(work);
+  const key = db as object;
+  const previous = localWriteQueues.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => next);
+  localWriteQueues.set(key, tail);
+  await previous;
+  try { return await retryBusy(work); }
+  finally {
+    release();
+    if (localWriteQueues.get(key) === tail) localWriteQueues.delete(key);
+  }
+}
+
+const localWriteQueues = new WeakMap<object, Promise<void>>();
+
+async function retryBusy<T>(work: () => Promise<T>, attempts = 20): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await work(); }
+    catch (error) {
+      if (!isSqliteBusy(error) || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 5 + Math.floor(Math.random() * 35)));
+    }
+  }
+}
 
 /**
  * Concurrency model: every stock mutation is ONE conditional UPDATE (compare-and-set on available stock),
@@ -31,14 +65,16 @@ export async function getAvailability(db: Db, variantIds: string[]): Promise<Map
 
 export async function setInitialStock(db: Db, variantId: string, quantity: number, actorUserId: string | null = null): Promise<void> {
   if (!Number.isInteger(quantity) || quantity < 0) throw new AppError("VALIDATION", "Invalid quantity");
-  await db.transaction(async (tx) => {
-    await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 }).onConflictDoNothing();
-    await claimKey(tx, `initial:${variantId}`, { variantId, type: "initial", onHandDelta: quantity, reason: "Initial stock", actorUserId, referenceType: "manual" });
-  });
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
+    const fresh = await claimKey(tx, `initial:${variantId}`, { variantId, type: "initial", onHandDelta: quantity, reason: "Initial stock", actorUserId, referenceType: "manual" });
+    if (!fresh) return;
+    await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 })
+      .onConflictDoUpdate({ target: inventoryLevels.variantId, set: { onHand: quantity, reserved: 0, updatedAt: new Date() } });
+  }));
 }
 
 export async function reserveStock(db: Db, lines: StockLine[], ref: string): Promise<void> {
-  await db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     for (const l of lines) {
       assertQty(l.quantity);
       const fresh = await claimKey(tx, `reserve:${ref}:${l.variantId}`, {
@@ -49,11 +85,11 @@ export async function reserveStock(db: Db, lines: StockLine[], ref: string): Pro
         WHERE variant_id = ${l.variantId} AND (allow_backorder = 1 OR on_hand - reserved >= ${l.quantity})`);
       if (affected(r) === 0) throw new AppError("OUT_OF_STOCK", "An item in your bag is no longer available in the requested quantity", { variantId: l.variantId });
     }
-  });
+  }));
 }
 
 export async function releaseReservation(db: Db, lines: StockLine[], ref: string): Promise<void> {
-  await db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     for (const l of lines) {
       const reserved = await tx.select().from(inventoryTransactions)
         .where(eq(inventoryTransactions.idempotencyKey, `reserve:${ref}:${l.variantId}`));
@@ -67,13 +103,14 @@ export async function releaseReservation(db: Db, lines: StockLine[], ref: string
       await tx.run(sql`UPDATE inventory_levels SET reserved = reserved - ${l.quantity}, updated_at = (unixepoch()*1000)
         WHERE variant_id = ${l.variantId} AND reserved >= ${l.quantity}`);
     }
-  });
+  }));
 }
 
 /** Convert a reservation into a sale exactly once per (order, variant). */
 export async function commitSale(db: Db, lines: StockLine[], ref: string): Promise<{ applied: boolean }> {
   let applied = false;
-  await db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
+    applied = false;
     for (const l of lines) {
       const fresh = await claimKey(tx, `sale:${ref}:${l.variantId}`, {
         variantId: l.variantId, type: "sale", onHandDelta: -l.quantity, reservedDelta: -l.quantity, referenceType: "order", referenceId: ref,
@@ -84,7 +121,7 @@ export async function commitSale(db: Db, lines: StockLine[], ref: string): Promi
       if (affected(r) === 0) throw new AppError("CONFLICT", "Reservation missing for sale commit", { variantId: l.variantId });
       applied = true;
     }
-  });
+  }));
   return { applied };
 }
 
@@ -98,7 +135,7 @@ export async function adjustStock(db: Db, actor: Actor, input: AdjustInput): Pro
     .innerJoin(products, eq(products.id, productVariants.productId)).where(eq(productVariants.id, input.variantId));
   if (!row) throw new AppError("NOT_FOUND", "Variant not found");
   assertCan(actor, "inventory.adjust", row.brandId);
-  await db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     const r = await tx.run(sql`UPDATE inventory_levels SET on_hand = on_hand + ${input.delta}, updated_at = (unixepoch()*1000)
       WHERE variant_id = ${input.variantId} AND on_hand + ${input.delta} >= reserved AND on_hand + ${input.delta} >= 0`);
     if (affected(r) === 0) throw new AppError("CONFLICT", "Adjustment would make stock negative or below reserved quantity");
@@ -107,7 +144,7 @@ export async function adjustStock(db: Db, actor: Actor, input: AdjustInput): Pro
       referenceType: "manual", actorUserId: actor.userId,
     });
     await writeAudit(tx, { actorUserId: actor.userId, action: "inventory.adjust", entityType: "variant", entityId: input.variantId, brandId: row.brandId, after: input });
-  });
+  }));
 }
 
 function assertQty(q: number) {

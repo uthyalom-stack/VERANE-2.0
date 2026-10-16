@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { createdAt, id, ts } from "./_helpers";
 import { brands } from "./catalog";
@@ -12,9 +13,10 @@ export const auditLogs = sqliteTable(
     action: text().notNull(), // e.g. product.update, inventory.adjust, role.grant
     entityType: text().notNull(),
     entityId: text(),
+    metadata: text(), // retained from the original migration
     beforeJson: text({ mode: "json" }).$type<unknown>(),
     afterJson: text({ mode: "json" }).$type<unknown>(),
-    createdAt: createdAt(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("audit_entity_idx").on(t.entityType, t.entityId), index("audit_actor_idx").on(t.actorUserId, t.createdAt)],
 );
@@ -39,7 +41,7 @@ export const customerPreferences = sqliteTable("customer_preferences", {
   orderUpdatesEmail: integer({ mode: "boolean" }).notNull().default(true), // transactional, informational
   favoriteStyles: text({ mode: "json" }).$type<string[]>(),
   sizeNotes: text(),
-  updatedAt: integer({ mode: "timestamp_ms" }).notNull().default(0),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull().default(sql`0`),
 });
 
 export const notifications = sqliteTable(
@@ -90,4 +92,17 @@ export const analyticsEvents = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index("analytics_name_idx").on(t.name, t.createdAt)],
+);
+
+
+/** Legacy infrastructure smoke-test table retained until the old smoke route is removed. */
+export const infrastructureSmokeTests = sqliteTable(
+  "infrastructure_smoke_tests",
+  {
+    id: id(),
+    testKey: text().notNull(),
+    value: text().notNull(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("infrastructure_smoke_tests_test_key_unique").on(t.testKey)],
 );

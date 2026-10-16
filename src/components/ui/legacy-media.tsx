@@ -6,7 +6,8 @@ interface MediaProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   aspectRatio?: "square" | "portrait" | "landscape" | "auto";
 }
 
-export function Media({ src, alt, aspectRatio = "auto", className = "", ...props }: MediaProps) {
+/** Legacy src-based media component retained for existing barrel imports. */
+export function LegacyMedia({ src, alt, aspectRatio = "auto", className = "", ...props }: MediaProps) {
   const aspectClasses = {
     square: "aspect-square object-cover",
     portrait: "aspect-[3/4] object-cover",

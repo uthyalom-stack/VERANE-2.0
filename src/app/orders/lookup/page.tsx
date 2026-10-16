@@ -24,7 +24,7 @@ export default async function Lookup({ searchParams }: { searchParams: Promise<{
       <h1 className="display text-6xl">Find your order</h1>
       <form className="mt-8 grid gap-4"><label className="grid gap-1.5 text-sm">Order number<input name="order" defaultValue={order} required placeholder="VR-20260101-ABC123" className="min-h-12 rounded-[var(--r-sm)] border border-line bg-surface px-4" /></label>
         <label className="grid gap-1.5 text-sm">Email used at checkout<input name="email" type="email" defaultValue={email} required className="min-h-12 rounded-[var(--r-sm)] border border-line bg-surface px-4" /></label><Button type="submit">Find order</Button></form>
-      <div role="status" className="mt-8">{limited ? <p className="text-red-400">Too many attempts. Try again later.</p> : order && email && !result ? <p className="text-red-400">We couldn't find an order matching those details.</p>
+      <div role="status" className="mt-8">{limited ? <p className="text-red-400">Too many attempts. Try again later.</p> : order && email && !result ? <p className="text-red-400">We couldn&apos;t find an order matching those details.</p>
         : result ? <div className="glass rounded-[var(--r-lg)] p-6"><p className="display text-3xl">{result.order.orderNumber}</p><p className="mt-2 text-muted">{result.order.status.replace(/_/g, " ")} · {formatMoney(result.order.total, result.order.currency)}</p>
           <ul className="mt-4 text-sm">{result.items.map((i) => <li key={i.id}>{i.productName} × {i.quantity}</li>)}</ul>{result.shipments[0]?.trackingUrl && <a className="mt-4 inline-block underline" href={result.shipments[0].trackingUrl}>Track delivery</a>}</div> : null}</div>
     </div>

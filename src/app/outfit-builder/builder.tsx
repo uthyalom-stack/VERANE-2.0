@@ -30,7 +30,7 @@ export function OutfitBuilder({ catalog, initial, initialName, outfitId, signedI
 
   // authoritative pricing from the server (debounced)
   useEffect(() => {
-    if (!items.length) { setPriced(null); return; }
+    if (!items.length) return;
     const t = setTimeout(async () => { const r = await priceOutfitAction(items.map(({ productId, variantId, slot, x, y, scale, sortOrder }) => ({ productId, variantId, slot, x, y, scale, sortOrder }))); if (r.ok) setPriced(r.data as Priced); else setMsg({ ok: false, t: r.message ?? "Could not price outfit" }); }, 300);
     return () => clearTimeout(t);
   }, [items]);
@@ -55,7 +55,8 @@ export function OutfitBuilder({ catalog, initial, initialName, outfitId, signedI
   }, []);
   const onKey = (e: React.KeyboardEvent, id: string, it: BuilderItem) => { const d = e.shiftKey ? 50 : 15; const m: Record<string, Partial<BuilderItem>> = { ArrowLeft: { x: Math.max(0, it.x - d) }, ArrowRight: { x: Math.min(1000, it.x + d) }, ArrowUp: { y: Math.max(0, it.y - d) }, ArrowDown: { y: Math.min(1000, it.y + d) } }; if (m[e.key]) { e.preventDefault(); patch(id, m[e.key]!); } if (e.key === "Delete" || e.key === "Backspace") remove(id); };
 
-  const complete = items.length > 0 && items.every((i) => i.variantId) && !!priced?.allAvailable;
+  const currentPriced = items.length > 0 ? priced : null;
+  const complete = items.length > 0 && items.every((i) => i.variantId) && !!currentPriced?.allAvailable;
   const body = () => items.map((i, n) => ({ productId: i.productId, variantId: i.variantId, slot: i.slot, x: i.x, y: i.y, scale: i.scale, sortOrder: n }));
   const save = () => start(async () => {
     if (!signedIn) { window.location.href = "/login?next=/outfit-builder"; return; }
@@ -80,11 +81,11 @@ export function OutfitBuilder({ catalog, initial, initialName, outfitId, signedI
       </section>
       <section aria-label="Your outfit" className="grid h-fit gap-5">
         <div className="grid gap-1.5"><label htmlFor="oname" className="text-sm">Outfit name</label><input id="oname" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} className="min-h-12 rounded-[var(--r-sm)] border border-line bg-surface px-4" /></div>
-        <ul className="divide-y divide-line">{items.map((i) => { const c = byId.get(i.productId)!; const line = priced?.lines.find((l) => l.productId === i.productId); return (
+        <ul className="divide-y divide-line">{items.map((i) => { const c = byId.get(i.productId)!; const line = currentPriced?.lines.find((l) => l.productId === i.productId); return (
           <li key={i.productId} className="py-3 text-sm"><div className="flex justify-between gap-3"><span>{c.name}<span className="block text-xs text-muted">{i.slot}</span></span><span>{line ? formatMoney(line.unitPrice, c.currency) : "…"}</span></div>
             {c.variants.length > 0 && <label className="mt-2 block"><span className="sr-only">Variant for {c.name}</span><select value={i.variantId ?? ""} onChange={(e) => patch(i.productId, { variantId: e.target.value || null })} className="min-h-11 w-full rounded-[var(--r-sm)] border border-line bg-surface px-3"><option value="">Choose size / colour</option>{c.variants.map((v) => <option key={v.id} value={v.id} disabled={!v.available}>{[v.colorName, v.size].filter(Boolean).join(" · ")}{v.available ? "" : " (sold out)"}</option>)}</select></label>}
             {line && !line.available && <p className="mt-1 text-red-400">Currently unavailable</p>}</li>); })}</ul>
-        <p className="flex justify-between text-xl" aria-live="polite"><span>Total</span><span>{priced ? formatMoney(priced.total, priced.currency) : "—"}</span></p>
+        <p className="flex justify-between text-xl" aria-live="polite"><span>Total</span><span>{currentPriced ? formatMoney(currentPriced.total, currentPriced.currency) : "—"}</span></p>
         <div className="grid gap-2"><Button onClick={bag} disabled={pending || !complete}>{items.some((i) => !i.variantId) ? "Choose every size to add to bag" : "Add outfit to bag"}</Button>
           <div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={save} disabled={pending || items.length === 0}>{signedIn ? (savedId ? "Update saved outfit" : "Save outfit") : "Sign in to save"}</Button><Button variant="outline" onClick={share} disabled={pending || !savedId}>Share</Button></div></div>
         {shareUrl && <p className="break-all text-xs text-muted">{shareUrl}</p>}

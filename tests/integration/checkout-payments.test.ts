@@ -6,7 +6,7 @@ import { addToCart, getCartView, getOrCreateCart, setCartQuantity } from "@/doma
 import { expireStaleOrders, finalizePayment, handlePaymentWebhook, startCheckout } from "@/domains/orders";
 import { createMockPaymentProvider } from "@/infrastructure/payments/mock";
 import { getAvailability } from "@/domains/inventory";
-import { hmacHex } from "@/lib/crypto";
+import { hmacHex, sha256Hex } from "@/lib/crypto";
 import { emailOutbox, inventoryLevels, orders, paymentAttempts, productVariants, webhookEvents } from "@/infrastructure/db/schema";
 
 let ctx: Awaited<ReturnType<typeof makeTestDb>>; let a: Awaited<ReturnType<typeof seedBrandsAndActors>>; let variantId = "";
@@ -22,7 +22,7 @@ beforeAll(async () => {
 afterAll(() => ctx.cleanup());
 
 async function cartWith(qty: number, guest = crypto.randomUUID()) {
-  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: guest });
+  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(guest) });
   await addToCart(ctx.db, cart.id, variantId, qty);
   return cart.id;
 }
