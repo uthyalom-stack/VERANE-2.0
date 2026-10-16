@@ -7,10 +7,10 @@ import { PageHead, Panel, Table, A } from "@/components/admin/ui";
 import { formatMoney } from "@/lib/money";
 
 export default async function Overview() {
-  const { db, actor } = await adminCtx(); const since = new Date(Date.now() - 30 * 86400_000);
+  const { db, actor } = await adminCtx();
   const scope = scopedBrandIds(actor, "orders.read");
   const paid = scope === "all"
-    ? (await db.select({ n: sql<number>`count(*)`, t: sql<number>`coalesce(sum(${orders.total}),0)` }).from(orders).where(and(eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} >= ${since.getTime()}`)))[0]!
+    ? (await db.select({ n: sql<number>`count(*)`, t: sql<number>`coalesce(sum(${orders.total}),0)` }).from(orders).where(and(eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} >= (unixepoch() * 1000 - 2592000000)`)))[0]!
     : scope.length ? (await db.select({ n: sql<number>`count(distinct ${orders.id})`, t: sql<number>`coalesce(sum(${orderItems.lineTotal}),0)` }).from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId)).where(and(eq(orders.paymentStatus, "paid"), inArray(orderItems.brandId, scope), sql`${orders.createdAt} >= ${since.getTime()}`)))[0]! : { n: 0, t: 0 };
   const iscope = scopedBrandIds(actor, "inventory.read");
   const low = iscope === "all" || iscope.length ? await db.select({ sku: productVariants.sku, name: products.name, avail: sql<number>`${inventoryLevels.onHand} - ${inventoryLevels.reserved}`, th: inventoryLevels.lowStockThreshold, variantId: productVariants.id }).from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId)).innerJoin(products, eq(products.id, productVariants.productId))
