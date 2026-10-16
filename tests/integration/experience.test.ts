@@ -26,7 +26,7 @@ beforeAll(async () => {
   const r = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Exp Dress", basePrice: 1_000_000, status: "published", variants: [{ sku: "EXP-1", size: "M", initialStock: 10 }] });
   productId = r.id; variantId = (await ctx.db.select().from(productVariants).where(eq(productVariants.productId, r.id)))[0]!.id;
   const [cat] = await ctx.db.insert(categories).values({ slug: "dresses", name: "Dresses", kind: "clothing" }).returning(); await ctx.db.insert(productCategories).values({ productId, categoryId: cat!.id });
-  me = (await ctx.db.insert(users).values({ email: "me@t.dev", passwordHash: "x" }).returning())[0]!.id; otherUser = (await ctx.db.insert(users).values({ email: "o@t.dev", passwordHash: "x" }).returning())[0]!.id;
+  me = (await ctx.db.insert(users).values({ email: "me@t.dev", name: "Me", isActive: true, passwordHash: "x", createdAt: new Date(), updatedAt: new Date() }).returning())[0]!.id; otherUser = (await ctx.db.insert(users).values({ email: "o@t.dev", name: "Other", isActive: true, passwordHash: "x", createdAt: new Date(), updatedAt: new Date() }).returning())[0]!.id;
 });
 afterAll(() => ctx.cleanup());
 
