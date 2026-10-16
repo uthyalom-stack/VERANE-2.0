@@ -88,7 +88,16 @@ export async function getOrCreateHome(db: Db, actor: Actor) {
 export async function savePageBlocks(db: Db, actor: Actor, pageId: string, input: { status: "draft" | "published"; blocks: Array<{ type: string; data: unknown; isVisible?: boolean }> }) {
   const [p] = await db.select().from(pages).where(eq(pages.id, pageId)); if (!p) throw new AppError("NOT_FOUND", "Page not found");
   assertCan(actor, "content.write", p.brandId);
-  const clean = input.blocks.map((b) => { const s = BLOCK_SCHEMAS[b.type as BlockType]; if (!s) throw new AppError("VALIDATION", `Unknown block type: ${b.type}`); return { type: b.type, data: s.parse(b.data ?? {}) as Record<string, unknown>, isVisible: b.isVisible ?? true }; });
+  const clean = input.blocks.map((b) => {
+    const s = BLOCK_SCHEMAS[b.type as BlockType];
+    if (!s) throw new AppError("VALIDATION", `Unknown block type: ${b.type}`);
+    try {
+      return { type: b.type, data: s.parse(b.data ?? {}) as Record<string, unknown>, isVisible: b.isVisible ?? true };
+    } catch (error) {
+      if (error instanceof z.ZodError) throw new AppError("VALIDATION", error.issues[0]?.message ?? "Invalid page block data");
+      throw error;
+    }
+  });
   await db.transaction(async (tx) => { await tx.delete(pageBlocks).where(eq(pageBlocks.pageId, pageId)); for (const [i, b] of clean.entries()) await tx.insert(pageBlocks).values({ pageId, sortOrder: i, type: b.type, data: b.data, isVisible: b.isVisible }); await tx.update(pages).set({ status: input.status }).where(eq(pages.id, pageId)); });
   await writeAudit(db, { actorUserId: actor.userId, action: "page.blocks", entityType: "page", entityId: pageId, brandId: p.brandId, after: { status: input.status, blocks: clean.length } });
 }
