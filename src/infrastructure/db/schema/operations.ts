@@ -13,9 +13,10 @@ export const auditLogs = sqliteTable(
     action: text().notNull(), // e.g. product.update, inventory.adjust, role.grant
     entityType: text().notNull(),
     entityId: text(),
+    metadata: text(), // retained from the original migration
     beforeJson: text({ mode: "json" }).$type<unknown>(),
     afterJson: text({ mode: "json" }).$type<unknown>(),
-    createdAt: createdAt(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
   },
   (t) => [index("audit_entity_idx").on(t.entityType, t.entityId), index("audit_actor_idx").on(t.actorUserId, t.createdAt)],
 );
@@ -91,4 +92,17 @@ export const analyticsEvents = sqliteTable(
     createdAt: createdAt(),
   },
   (t) => [index("analytics_name_idx").on(t.name, t.createdAt)],
+);
+
+
+/** Legacy infrastructure smoke-test table retained until the old smoke route is removed. */
+export const infrastructureSmokeTests = sqliteTable(
+  "infrastructure_smoke_tests",
+  {
+    id: id(),
+    testKey: text().notNull(),
+    value: text().notNull(),
+    createdAt: integer({ mode: "timestamp_ms" }).notNull(),
+  },
+  (t) => [uniqueIndex("infrastructure_smoke_tests_test_key_unique").on(t.testKey)],
 );
