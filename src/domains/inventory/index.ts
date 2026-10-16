@@ -10,6 +10,21 @@ type Tx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 const affected = (r: unknown): number => (r as { rowsAffected?: number }).rowsAffected ?? 0;
 
+function isSqliteBusy(error: unknown): boolean {
+  const e = error as { code?: string; rawCode?: number; message?: string };
+  return e?.code === "SQLITE_BUSY" || e?.rawCode === 5 || /database is locked/i.test(e?.message ?? "");
+}
+
+async function retryBusy<T>(work: () => Promise<T>, attempts = 8): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await work(); }
+    catch (error) {
+      if (!isSqliteBusy(error) || attempt >= attempts) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
+  }
+}
+
 /**
  * Concurrency model: every stock mutation is ONE conditional UPDATE (compare-and-set on available stock),
  * so two buyers can never both pass the check, regardless of transaction isolation. Each mutation also
@@ -32,13 +47,15 @@ export async function getAvailability(db: Db, variantIds: string[]): Promise<Map
 export async function setInitialStock(db: Db, variantId: string, quantity: number, actorUserId: string | null = null): Promise<void> {
   if (!Number.isInteger(quantity) || quantity < 0) throw new AppError("VALIDATION", "Invalid quantity");
   await db.transaction(async (tx) => {
-    await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 }).onConflictDoNothing();
-    await claimKey(tx, `initial:${variantId}`, { variantId, type: "initial", onHandDelta: quantity, reason: "Initial stock", actorUserId, referenceType: "manual" });
+    const fresh = await claimKey(tx, `initial:${variantId}`, { variantId, type: "initial", onHandDelta: quantity, reason: "Initial stock", actorUserId, referenceType: "manual" });
+    if (!fresh) return;
+    await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 })
+      .onConflictDoUpdate({ target: inventoryLevels.variantId, set: { onHand: quantity, reserved: 0, updatedAt: new Date() } });
   });
 }
 
 export async function reserveStock(db: Db, lines: StockLine[], ref: string): Promise<void> {
-  await db.transaction(async (tx) => {
+  await retryBusy(() => db.transaction(async (tx) => {
     for (const l of lines) {
       assertQty(l.quantity);
       const fresh = await claimKey(tx, `reserve:${ref}:${l.variantId}`, {
@@ -49,7 +66,7 @@ export async function reserveStock(db: Db, lines: StockLine[], ref: string): Pro
         WHERE variant_id = ${l.variantId} AND (allow_backorder = 1 OR on_hand - reserved >= ${l.quantity})`);
       if (affected(r) === 0) throw new AppError("OUT_OF_STOCK", "An item in your bag is no longer available in the requested quantity", { variantId: l.variantId });
     }
-  });
+  }));
 }
 
 export async function releaseReservation(db: Db, lines: StockLine[], ref: string): Promise<void> {
