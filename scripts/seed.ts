@@ -14,7 +14,7 @@ import { reindexProduct } from "../src/domains/search";
 if (process.env.APP_ENV === "production" || process.env.NODE_ENV === "production") {
   throw new Error("Development seed refuses to run in production");
 }
-const pw = process.env.SEED_ADMIN_PASSWORD;
+const pw = process.env.SEED_ADMIN_PASSWORD ?? "";
 if (!pw) throw new Error("SEED_ADMIN_PASSWORD is required to run the development seed");
 const { db } = createDb(process.env.DATABASE_URL ?? "file:./local.db", process.env.DATABASE_AUTH_TOKEN);
 await reconcileRbac(db);
