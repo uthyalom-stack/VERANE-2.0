@@ -10,8 +10,11 @@ import { productInput, resolveSlug, type ProductInput } from "./schemas";
 
 /** Brand is read from the DB row for existing products; client-supplied brandId is only trusted after an authorization check on it. */
 export async function createProduct(db: Db, actor: Actor, raw: unknown) {
+  const candidateBrandId = raw && typeof raw === "object" && "brandId" in raw && typeof (raw as { brandId?: unknown }).brandId === "string"
+    ? (raw as { brandId: string }).brandId
+    : undefined;
+  assertCan(actor, "catalog.product.write", candidateBrandId);
   const input = productInput.parse(raw);
-  assertCan(actor, "catalog.product.write", input.brandId);
   const [brand] = await db.select().from(brands).where(eq(brands.id, input.brandId));
   if (!brand?.isActive) throw new AppError("VALIDATION", "Unknown brand");
   const slug = resolveSlug(input);
@@ -46,10 +49,10 @@ export async function createProduct(db: Db, actor: Actor, raw: unknown) {
 }
 
 export async function updateProduct(db: Db, actor: Actor, productId: string, raw: unknown) {
-  const input = productInput.parse(raw);
   const [existing] = await db.select().from(products).where(eq(products.id, productId));
   if (!existing) throw new AppError("NOT_FOUND", "Product not found");
-  assertCan(actor, "catalog.product.write", existing.brandId); // authorize against stored brand
+  assertCan(actor, "catalog.product.write", existing.brandId); // authorize before parsing client-controlled data
+  const input = productInput.parse(raw);
   if (input.brandId !== existing.brandId) assertCan(actor, "catalog.product.write", input.brandId); // and target brand for moves
   const slug = resolveSlug(input);
   await db.transaction(async (tx) => {
