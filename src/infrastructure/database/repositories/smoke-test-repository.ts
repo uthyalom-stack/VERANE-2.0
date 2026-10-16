@@ -13,7 +13,9 @@ export class DrizzleSmokeTestRepository implements ISmokeTestRepository {
 
   async create(data: NewInfrastructureSmokeTest): Promise<InfrastructureSmokeTest> {
     const inserted = await this.db.insert(infrastructureSmokeTests).values(data).returning();
-    return inserted[0];
+    const record = inserted[0];
+    if (!record) throw new Error("Smoke-test insert returned no record");
+    return record;
   }
 
   async findByKey(testKey: string): Promise<InfrastructureSmokeTest | null> {
