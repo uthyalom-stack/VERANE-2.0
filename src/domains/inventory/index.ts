@@ -15,12 +15,12 @@ function isSqliteBusy(error: unknown): boolean {
   return e?.code === "SQLITE_BUSY" || e?.rawCode === 5 || /database is locked/i.test(e?.message ?? "");
 }
 
-async function retryBusy<T>(work: () => Promise<T>, attempts = 30): Promise<T> {
+async function retryBusy<T>(work: () => Promise<T>, attempts = 12): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try { return await work(); }
     catch (error) {
       if (!isSqliteBusy(error) || attempt >= attempts) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1) + Math.floor(Math.random() * 25)));
+      await new Promise((resolve) => setTimeout(resolve, 5 * (attempt + 1) + Math.floor(Math.random() * 15)));
     }
   }
 }
