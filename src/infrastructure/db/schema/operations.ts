@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { createdAt, id, ts } from "./_helpers";
 import { brands } from "./catalog";
@@ -39,7 +40,7 @@ export const customerPreferences = sqliteTable("customer_preferences", {
   orderUpdatesEmail: integer({ mode: "boolean" }).notNull().default(true), // transactional, informational
   favoriteStyles: text({ mode: "json" }).$type<string[]>(),
   sizeNotes: text(),
-  updatedAt: integer({ mode: "timestamp_ms" }).notNull().default(0),
+  updatedAt: integer({ mode: "timestamp_ms" }).notNull().default(sql`0`),
 });
 
 export const notifications = sqliteTable(
