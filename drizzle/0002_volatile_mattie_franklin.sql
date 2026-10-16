@@ -636,3 +636,12 @@ CREATE UNIQUE INDEX `permissions_code_unique` ON `permissions` (`code`);--> stat
 ALTER TABLE `roles` ADD `code` text;--> statement-breakpoint
 ALTER TABLE `roles` ADD `is_system` integer DEFAULT true NOT NULL;--> statement-breakpoint
 CREATE UNIQUE INDEX `roles_code_unique` ON `roles` (`code`);
+--> statement-breakpoint
+UPDATE users SET kind = 'admin' WHERE id IN (SELECT user_id FROM admin_profiles);--> statement-breakpoint
+UPDATE users SET status = CASE WHEN is_active <> 0 THEN 'active' ELSE 'suspended' END;--> statement-breakpoint
+UPDATE admin_profiles SET display_name = (SELECT name FROM users WHERE users.id = admin_profiles.user_id) WHERE display_name = '';--> statement-breakpoint
+UPDATE customer_profiles SET first_name = CASE WHEN instr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), ' ') > 0 THEN substr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), 1, instr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), ' ') - 1) ELSE trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)) END WHERE first_name = '';--> statement-breakpoint
+UPDATE customer_profiles SET last_name = CASE WHEN instr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), ' ') > 0 THEN substr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), instr(trim((SELECT name FROM users WHERE users.id = customer_profiles.user_id)), ' ') + 1) ELSE '' END WHERE last_name = '';--> statement-breakpoint
+UPDATE brands SET theme_key = CASE code WHEN 'UTHY_LUXURY' THEN 'uthy' WHEN 'ALOMZIEE_FOOTIES' THEN 'alomzie' ELSE theme_key END WHERE theme_key = 'default';--> statement-breakpoint
+UPDATE roles SET code = upper(trim(replace(name, ' ', '_'))) WHERE code IS NULL;--> statement-breakpoint
+UPDATE permissions SET code = name WHERE code IS NULL;
