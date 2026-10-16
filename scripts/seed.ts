@@ -11,7 +11,11 @@ import { loadActor } from "../src/domains/authorization";
 import { hashPassword } from "../src/lib/crypto";
 import { reindexProduct } from "../src/domains/search";
 
-if (process.env.APP_ENV === "production") throw new Error("Seed refuses to run in production");
+if (process.env.APP_ENV === "production" || process.env.NODE_ENV === "production") {
+  throw new Error("Development seed refuses to run in production");
+}
+const pw = process.env.SEED_ADMIN_PASSWORD;
+if (!pw) throw new Error("SEED_ADMIN_PASSWORD is required to run the development seed");
 const { db } = createDb(process.env.DATABASE_URL ?? "file:./local.db", process.env.DATABASE_AUTH_TOKEN);
 await reconcileRbac(db);
 
@@ -32,7 +36,6 @@ for (const c of cats) await db.insert(s.categories).values(c).onConflictDoNothin
 const cat = Object.fromEntries((await db.select().from(s.categories)).map((c) => [c.slug, c.id]));
 
 // admin users (credentials from env; never hardcode real ones)
-const pw = process.env.SEED_ADMIN_PASSWORD ?? "ChangeMe-Dev-Only-123";
 const roleRows = Object.fromEntries((await db.select().from(s.roles)).map((r) => [r.code ?? "", r.id]));
 async function admin(email: string, name: string, role: string, brandId: string | null) {
   const [ex] = await db.select().from(s.users).where(eq(s.users.email, email));
