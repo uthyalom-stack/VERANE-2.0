@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/storefront-schema-repair
+  pull_request:
+    branches:
+      - integration/stage-4-combined
 
 permissions:
   contents: write
