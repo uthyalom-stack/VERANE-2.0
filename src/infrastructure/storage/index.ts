@@ -18,7 +18,9 @@ export async function getMediaStorage(): Promise<MediaStorage> {
   const env = getEnv();
   if (env.MEDIA_DRIVER === "r2") {
     const { getCloudflareContext } = await import("@opennextjs/cloudflare");
-    const bucket = (await getCloudflareContext({ async: true })).env.MEDIA_BUCKET as R2BucketLike | undefined;
+    const context = await getCloudflareContext({ async: true });
+    const cfEnv = context.env as typeof context.env & { MEDIA_BUCKET?: R2BucketLike };
+    const bucket = cfEnv.MEDIA_BUCKET;
     if (!bucket) throw new Error("R2 binding MEDIA_BUCKET is not configured (see wrangler.jsonc)");
     return r2Storage(bucket);
   }
