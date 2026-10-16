@@ -13,7 +13,7 @@ export async function createProduct(db: Db, actor: Actor, raw: unknown) {
   const candidateBrandId = raw && typeof raw === "object" && "brandId" in raw && typeof (raw as { brandId?: unknown }).brandId === "string"
     ? (raw as { brandId: string }).brandId
     : undefined;
-  assertCan(actor, "catalog.product.write", candidateBrandId);
+  assertCan(actor, "catalog.product.write", candidateBrandId ?? null);
   const input = productInput.parse(raw);
   const [brand] = await db.select().from(brands).where(eq(brands.id, input.brandId));
   if (!brand?.isActive) throw new AppError("VALIDATION", "Unknown brand");
