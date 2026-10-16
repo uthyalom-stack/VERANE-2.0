@@ -42,9 +42,9 @@ export async function registerCustomer(db: Db, raw: unknown, pepper: string) {
 export async function rateLimit(db: Db, bucket: string, max: number, windowMs: number, now = Date.now()): Promise<boolean> {
   const since = now - windowMs;
   const [{ n } = { n: 0 }] = await db.select({ n: sql<number>`count(*)` }).from(rateLimitHits)
-    .where(and(eq(rateLimitHits.bucket, bucket), gt(rateLimitHits.at, since)));
+    .where(and(eq(rateLimitHits.bucket, bucket), gt(rateLimitHits.at, new Date(since))));
   if (n >= max) return false;
-  await db.insert(rateLimitHits).values({ bucket, at: now });
+  await db.insert(rateLimitHits).values({ bucket, at: new Date(now) });
   return true;
 }
 
