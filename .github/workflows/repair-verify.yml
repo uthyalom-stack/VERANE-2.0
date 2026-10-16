@@ -1,15 +1,12 @@
 name: Repair branch verification
 
 on:
-  push:
-    branches:
-      - fix/storefront-schema-repair
   pull_request:
     branches:
       - integration/stage-4-combined
 
 concurrency:
-  group: verane-repair-${{ github.ref }}
+  group: verane-repair-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 permissions:
