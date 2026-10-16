@@ -28,19 +28,19 @@ export function BagDrawer({ initialCount }: { initialCount: number }) {
     window.addEventListener(BAG_OPEN, o); window.addEventListener(BAG_CHANGED, c);
     return () => { window.removeEventListener(BAG_OPEN, o); window.removeEventListener(BAG_CHANGED, c); };
   }, [load]);
+  const panel = useRef<HTMLDivElement>(null);
+  const trap = useCallback((e: KeyboardEvent) => {
+    const f = panel.current?.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex='-1'])");
+    if (!f?.length) return; const first = f[0]!, last = f[f.length - 1]!;
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }, []);
   useEffect(() => {
     if (!open) { (opener.current as HTMLElement | null)?.focus?.(); return; }
     document.body.style.overflow = "hidden"; closeRef.current?.focus();
     const key = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); if (e.key === "Tab") trap(e); };
     window.addEventListener("keydown", key);
     return () => { document.body.style.overflow = ""; window.removeEventListener("keydown", key); };
-  }, [open]);
-  const panel = useRef<HTMLDivElement>(null);
-  function trap(e: KeyboardEvent) {
-    const f = panel.current?.querySelectorAll<HTMLElement>("a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex='-1'])");
-    if (!f?.length) return; const first = f[0]!, last = f[f.length - 1]!;
-    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
-  }
+  }, [open, trap]);
 
   return (
     <>
