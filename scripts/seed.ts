@@ -19,7 +19,7 @@ const brandRows = [
   { code: "UTHY_LUXURY", slug: "uthy-luxury", name: "UTHY LUXURY", tagline: "Restraint, sculpted.", themeKey: "uthy", description: "Refined, sculptural, premium." },
   { code: "ALOMZIEE_FOOTIES", slug: "alomziee-footies", name: "ALOMZIEE FOOTIES", tagline: "Loud on purpose.", themeKey: "alomzie", description: "Expressive footwear and fashion." },
 ];
-for (const b of brandRows) await db.insert(s.brands).values({ ...b, createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
+for (const b of brandRows) await db.insert(s.brands).values({ ...b, createdAt: new Date(), updatedAt: new Date() }).onConflictDoUpdate({ target: s.brands.code, set: { tagline: b.tagline, themeKey: b.themeKey, description: b.description, updatedAt: new Date() } });
 const brand = Object.fromEntries((await db.select().from(s.brands)).map((b) => [b.code, b]));
 
 const cats = [
