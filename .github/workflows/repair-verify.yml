@@ -34,19 +34,22 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate a clean baseline migration from the canonical schema
-        run: npx drizzle-kit generate --config=drizzle.fresh.config.ts --name=canonical-schema
+      - name: Generate a forward migration from the preserved migration history
+        run: npm run db:generate
+
+      - name: Confirm a new migration was generated
+        run: node -e 'const j = JSON.parse(require("node:fs").readFileSync("drizzle/meta/_journal.json", "utf8")); if (j.entries.length < 3) { console.error("Drizzle did not append a forward migration"); process.exit(1); }'
 
       - name: Commit generated migration if needed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if [ -n "$(git status --porcelain -- drizzle_generated)" ]; then
-            git add drizzle_generated
-            git commit -m "chore(db): generate canonical schema snapshot"
+          if [ -n "$(git status --porcelain -- drizzle)" ]; then
+            git add drizzle
+            git commit -m "fix(db): generate forward storefront schema migration"
             git push origin HEAD:fix/storefront-schema-repair
           else
-            echo "Canonical schema baseline already exists."
+            echo "Forward migration is already committed."
           fi
 
       - name: Run project checks
