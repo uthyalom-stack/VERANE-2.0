@@ -50,6 +50,7 @@ jobs:
         env:
           SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
           TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
+          SEED_ADMIN_PASSWORD: ci-only-seed-password-not-for-production-1234567890
           DATABASE_URL: file:./ci.db
         run: npm run db:migrate && npm run db:seed
 
