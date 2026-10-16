@@ -8,6 +8,10 @@ on:
     branches:
       - integration/stage-4-combined
 
+concurrency:
+  group: verane-repair-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: write
 
