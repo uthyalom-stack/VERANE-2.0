@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
+import { sha256Hex } from "@/lib/crypto";
 import { makeTestDb, seedBrandsAndActors } from "../helpers";
 import { createProduct } from "@/domains/catalog/admin";
 import { addToCart, getOrCreateCart } from "@/domains/cart";
@@ -31,7 +32,7 @@ beforeAll(async () => {
 afterAll(() => ctx.cleanup());
 
 async function paidOrder(email = "buyer@t.dev", userId: string | null = null) {
-  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: crypto.randomUUID() }); await addToCart(ctx.db, cart.id, variantId, 1);
+  const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) }); await addToCart(ctx.db, cart.id, variantId, 1);
   const r = await startCheckout(ctx.db, createMockPaymentProvider({ secret: "s" }), { cartId: cart.id, userId, email, phone: "08012345678", address, shipping, callbackUrl: "http://x/cb" }, new Date(), { pepper: PEPPER });
   return r;
 }
