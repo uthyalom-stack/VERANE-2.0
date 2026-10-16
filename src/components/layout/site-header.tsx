@@ -20,7 +20,6 @@ export function SiteHeader({ cartCount, signedIn }: { cartCount: number; signedI
   const hidden = path.startsWith("/admin");
 
   useEffect(() => { const f = () => setScrolled(window.scrollY > 40); f(); window.addEventListener("scroll", f, { passive: true }); return () => window.removeEventListener("scroll", f); }, []);
-  useEffect(() => { setOpen(false); }, [path]);
   useEffect(() => {
     if (!open) return; document.body.style.overflow = "hidden"; closeRef.current?.focus();
     const esc = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false); window.addEventListener("keydown", esc);
@@ -46,7 +45,7 @@ export function SiteHeader({ cartCount, signedIn }: { cartCount: number; signedI
       {open && (
         <div id="mobile-menu" role="dialog" aria-modal="true" aria-label="Menu" className="fixed inset-0 z-[var(--z-drawer)] flex flex-col overflow-y-auto bg-bg/95 px-6 pb-10 pt-4 backdrop-blur-xl">
           <div className="flex h-12 items-center justify-between"><span className="display text-2xl tracking-[0.2em]">VÉRANE</span><button ref={closeRef} type="button" className="glass min-h-11 rounded-full px-5 text-sm" onClick={() => setOpen(false)}>Close</button></div>
-          <nav aria-label="Mobile" className="mt-8 flex flex-1 flex-col justify-center gap-3">{[...NAV, { href: "/search", label: "Search" }, { href: signedIn ? "/account" : "/login", label: signedIn ? "Account" : "Sign in" }].map((n) => <Link key={n.href + n.label} href={n.href} className="display text-4xl leading-none sm:text-5xl">{n.label}</Link>)}</nav>
+          <nav aria-label="Mobile" className="mt-8 flex flex-1 flex-col justify-center gap-3">{[...NAV, { href: "/search", label: "Search" }, { href: signedIn ? "/account" : "/login", label: signedIn ? "Account" : "Sign in" }].map((n) => <Link key={n.href + n.label} href={n.href} className="display text-4xl leading-none sm:text-5xl" onClick={() => setOpen(false)}>{n.label}</Link>)}</nav>
           <p className="text-sm text-muted">Two Brands. One Expression.</p></div>)}
     </header>
   );
