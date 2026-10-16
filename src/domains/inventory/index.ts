@@ -66,7 +66,7 @@ export async function reserveStock(db: Db, lines: StockLine[], ref: string): Pro
         WHERE variant_id = ${l.variantId} AND (allow_backorder = 1 OR on_hand - reserved >= ${l.quantity})`);
       if (affected(r) === 0) throw new AppError("OUT_OF_STOCK", "An item in your bag is no longer available in the requested quantity", { variantId: l.variantId });
     }
-  }, { behavior: "immediate" }));
+  }));
 }
 
 export async function releaseReservation(db: Db, lines: StockLine[], ref: string): Promise<void> {
@@ -84,7 +84,7 @@ export async function releaseReservation(db: Db, lines: StockLine[], ref: string
       await tx.run(sql`UPDATE inventory_levels SET reserved = reserved - ${l.quantity}, updated_at = (unixepoch()*1000)
         WHERE variant_id = ${l.variantId} AND reserved >= ${l.quantity}`);
     }
-  }, { behavior: "immediate" }));
+  }));
 }
 
 /** Convert a reservation into a sale exactly once per (order, variant). */
@@ -102,7 +102,7 @@ export async function commitSale(db: Db, lines: StockLine[], ref: string): Promi
       if (affected(r) === 0) throw new AppError("CONFLICT", "Reservation missing for sale commit", { variantId: l.variantId });
       applied = true;
     }
-  }, { behavior: "immediate" }));
+  }));
   return { applied };
 }
 
@@ -125,7 +125,7 @@ export async function adjustStock(db: Db, actor: Actor, input: AdjustInput): Pro
       referenceType: "manual", actorUserId: actor.userId,
     });
     await writeAudit(tx, { actorUserId: actor.userId, action: "inventory.adjust", entityType: "variant", entityId: input.variantId, brandId: row.brandId, after: input });
-  }, { behavior: "immediate" }));
+  }));
 }
 
 function assertQty(q: number) {
