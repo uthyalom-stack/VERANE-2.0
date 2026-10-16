@@ -17,6 +17,7 @@ export async function loadActor(db: Db, userId: string): Promise<Actor> {
     .where(eq(userRoles.userId, userId));
   const map = new Map<string, { roleCode: string; brandId: string | null; permissions: Set<string> }>();
   for (const r of rows) {
+    if (!r.roleCode || !r.perm) continue; // legacy rows are backfilled by reconcileRbac
     const key = `${r.roleCode}|${r.brandId ?? ""}`;
     const g = map.get(key) ?? { roleCode: r.roleCode, brandId: r.brandId, permissions: new Set<string>() };
     g.permissions.add(r.perm);
