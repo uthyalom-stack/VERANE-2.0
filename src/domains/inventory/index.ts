@@ -74,7 +74,7 @@ export async function setInitialStock(db: Db, variantId: string, quantity: numbe
 }
 
 export async function reserveStock(db: Db, lines: StockLine[], ref: string): Promise<void> {
-  await retryBusy(() => db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     for (const l of lines) {
       assertQty(l.quantity);
       const fresh = await claimKey(tx, `reserve:${ref}:${l.variantId}`, {
@@ -89,7 +89,7 @@ export async function reserveStock(db: Db, lines: StockLine[], ref: string): Pro
 }
 
 export async function releaseReservation(db: Db, lines: StockLine[], ref: string): Promise<void> {
-  await retryBusy(() => db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     for (const l of lines) {
       const reserved = await tx.select().from(inventoryTransactions)
         .where(eq(inventoryTransactions.idempotencyKey, `reserve:${ref}:${l.variantId}`));
@@ -109,7 +109,7 @@ export async function releaseReservation(db: Db, lines: StockLine[], ref: string
 /** Convert a reservation into a sale exactly once per (order, variant). */
 export async function commitSale(db: Db, lines: StockLine[], ref: string): Promise<{ applied: boolean }> {
   let applied = false;
-  await retryBusy(() => db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     applied = false;
     for (const l of lines) {
       const fresh = await claimKey(tx, `sale:${ref}:${l.variantId}`, {
@@ -135,7 +135,7 @@ export async function adjustStock(db: Db, actor: Actor, input: AdjustInput): Pro
     .innerJoin(products, eq(products.id, productVariants.productId)).where(eq(productVariants.id, input.variantId));
   if (!row) throw new AppError("NOT_FOUND", "Variant not found");
   assertCan(actor, "inventory.adjust", row.brandId);
-  await retryBusy(() => db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     const r = await tx.run(sql`UPDATE inventory_levels SET on_hand = on_hand + ${input.delta}, updated_at = (unixepoch()*1000)
       WHERE variant_id = ${input.variantId} AND on_hand + ${input.delta} >= reserved AND on_hand + ${input.delta} >= 0`);
     if (affected(r) === 0) throw new AppError("CONFLICT", "Adjustment would make stock negative or below reserved quantity");
