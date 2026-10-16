@@ -1,5 +1,5 @@
 import { eq, inArray, sql } from "drizzle-orm";
-import type { Db } from "@/infrastructure/db/client";
+import { isLocalDb, type Db } from "@/infrastructure/db/client";
 import { inventoryLevels, inventoryTransactions, productVariants, products } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { assertCan, type Actor } from "@/domains/authorization";
@@ -14,6 +14,25 @@ function isSqliteBusy(error: unknown): boolean {
   const e = error as { code?: string; rawCode?: number; message?: string };
   return e?.code === "SQLITE_BUSY" || e?.rawCode === 5 || /database is locked/i.test(e?.message ?? "");
 }
+
+
+async function inventoryWrite<T>(db: Db, work: () => Promise<T>): Promise<T> {
+  if (!isLocalDb(db)) return retryBusy(work);
+  const key = db as object;
+  const previous = localWriteQueues.get(key) ?? Promise.resolve();
+  let release!: () => void;
+  const next = new Promise<void>((resolve) => { release = resolve; });
+  const tail = previous.then(() => next);
+  localWriteQueues.set(key, tail);
+  await previous;
+  try { return await retryBusy(work); }
+  finally {
+    release();
+    if (localWriteQueues.get(key) === tail) localWriteQueues.delete(key);
+  }
+}
+
+const localWriteQueues = new WeakMap<object, Promise<void>>();
 
 async function retryBusy<T>(work: () => Promise<T>, attempts = 20): Promise<T> {
   for (let attempt = 0; ; attempt++) {
@@ -46,7 +65,7 @@ export async function getAvailability(db: Db, variantIds: string[]): Promise<Map
 
 export async function setInitialStock(db: Db, variantId: string, quantity: number, actorUserId: string | null = null): Promise<void> {
   if (!Number.isInteger(quantity) || quantity < 0) throw new AppError("VALIDATION", "Invalid quantity");
-  await retryBusy(() => db.transaction(async (tx) => {
+  await inventoryWrite(db, () => db.transaction(async (tx) => {
     const fresh = await claimKey(tx, `initial:${variantId}`, { variantId, type: "initial", onHandDelta: quantity, reason: "Initial stock", actorUserId, referenceType: "manual" });
     if (!fresh) return;
     await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 })
