@@ -18,9 +18,14 @@ const dupe = (e: unknown, msg: string) => { if (String(e).includes("UNIQUE")) th
 /* ---------- Looks ---------- */
 const lookSchema = z.object({ brandId: z.string().min(1), title: z.string().trim().min(2).max(120), slug: z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/).optional(), description: z.string().max(2000).nullable().optional(), stylingNotes: z.string().max(1000).nullable().optional(), imageMediaId: optId, status, publishAt: nullableDate, sortOrder: z.coerce.number().int().default(0), seoTitle: z.string().max(70).nullable().optional(), seoDescription: z.string().max(170).nullable().optional() });
 export async function saveLook(db: Db, actor: Actor, raw: unknown, id?: string) {
-  const l = lookSchema.parse(raw); let existingBrand: string | null | undefined;
+  let existingBrand: string | null | undefined;
   if (id) { const [ex] = await db.select().from(looks).where(eq(looks.id, id)); if (!ex) throw new AppError("NOT_FOUND", "Look not found"); existingBrand = ex.brandId; }
-  await guard(actor, "content.write", existingBrand, l.brandId);
+  const candidateBrandId = raw && typeof raw === "object" && "brandId" in raw && typeof (raw as { brandId?: unknown }).brandId === "string"
+    ? (raw as { brandId: string }).brandId
+    : null;
+  if (existingBrand !== undefined) assertCan(actor, "content.write", existingBrand);
+  assertCan(actor, "content.write", candidateBrandId);
+  const l = lookSchema.parse(raw);
   const row = { brandId: l.brandId, title: l.title, slug: l.slug ?? slugify(l.title), description: l.description ?? null, stylingNotes: l.stylingNotes ?? null, imageMediaId: l.imageMediaId, status: l.status, publishAt: l.publishAt ?? null, sortOrder: l.sortOrder, seoTitle: l.seoTitle ?? null, seoDescription: l.seoDescription ?? null };
   try { if (id) await db.update(looks).set(row).where(eq(looks.id, id)); else id = (await db.insert(looks).values(row).returning())[0]!.id; } catch (e) { dupe(e, "A look with that slug exists"); }
   await writeAudit(db, { actorUserId: actor.userId, action: "look.save", entityType: "look", entityId: id!, brandId: l.brandId, after: row });
