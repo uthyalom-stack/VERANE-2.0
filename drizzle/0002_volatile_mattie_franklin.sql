@@ -645,3 +645,16 @@ UPDATE customer_profiles SET last_name = CASE WHEN instr(trim((SELECT name FROM 
 UPDATE brands SET theme_key = CASE code WHEN 'UTHY_LUXURY' THEN 'uthy' WHEN 'ALOMZIEE_FOOTIES' THEN 'alomzie' ELSE theme_key END WHERE theme_key = 'default';--> statement-breakpoint
 UPDATE roles SET code = upper(trim(replace(name, ' ', '_'))) WHERE code IS NULL;--> statement-breakpoint
 UPDATE permissions SET code = name WHERE code IS NULL;
+--> statement-breakpoint
+-- Preserve legacy administrator grants when authorization switches from admin_roles to user_roles.
+INSERT INTO user_roles (id, user_id, role_id, brand_id, granted_by, created_at)
+SELECT lower(hex(randomblob(16))), ap.user_id, ar.role_id, ar.brand_id, NULL, ar.created_at
+FROM admin_roles AS ar
+JOIN admin_profiles AS ap ON ap.id = ar.admin_profile_id
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM user_roles AS ur
+  WHERE ur.user_id = ap.user_id
+    AND ur.role_id = ar.role_id
+    AND ur.brand_id IS ar.brand_id
+);
