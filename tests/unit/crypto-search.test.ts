@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { hashPassword, verifyPassword, hmacHex, safeEqual } from "@/lib/crypto";
 import { toFtsQuery } from "@/domains/search";
 import { slugify } from "@/lib/slug";
-import { assertProductionIntegrations, getEnv } from "@/lib/env";
+import { getEnv } from "@/lib/env";
 
 describe("crypto", () => {
   it("hashes and verifies passwords; wrong password fails", async () => {
@@ -25,7 +25,6 @@ describe("search query sanitising", () => {
 describe("slug + env", () => {
   it("slugifies", () => expect(slugify("VÉRANE Évening & Gown")).toBe("verane-evening-and-gown"));
   it("production fails closed without live integrations", () => {
-    const env = getEnv({ SESSION_SECRET: "x".repeat(40), TOKEN_PEPPER: "y".repeat(40), APP_ENV: "production", APP_URL: "https://example.com", DATABASE_URL: "libsql://x" });
-    expect(() => assertProductionIntegrations(env)).toThrow(/PAYSTACK/);
+    expect(() => getEnv({ SESSION_SECRET: "x".repeat(40), TOKEN_PEPPER: "y".repeat(40), APP_ENV: "production", APP_URL: "https://example.com", DATABASE_URL: "libsql://x" })).toThrow(/PAYSTACK/);
   });
 });
