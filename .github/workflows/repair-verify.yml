@@ -46,12 +46,20 @@ jobs:
           fi
           echo "Committed migration history matches the schema."
 
+      - name: Prepare disposable SQLite database for build
+        env:
+          SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
+          TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
+          DATABASE_URL: file:./ci.db
+        run: npm run db:migrate && npm run db:seed
+
       - name: Run project checks
         id: project-check
         continue-on-error: true
         env:
           SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
           TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
+          DATABASE_URL: file:./ci.db
         run: npm run check
 
       - name: Run offline tests
