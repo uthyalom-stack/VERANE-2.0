@@ -34,19 +34,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate schema migration from the committed Drizzle schema
-        run: npm run db:generate
+      - name: Generate a clean baseline migration from the canonical schema
+        run: npx drizzle-kit generate --config=drizzle.fresh.config.ts --name=canonical-schema
 
       - name: Commit generated migration if needed
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- drizzle; then
-            git add drizzle
-            git commit -m "fix(db): generate missing storefront schema migration"
+          if ! git diff --quiet -- drizzle_generated; then
+            git add drizzle_generated
+            git commit -m "chore(db): generate canonical schema snapshot"
             git push origin HEAD:fix/storefront-schema-repair
           else
-            echo "Drizzle schema is already in sync with migration snapshots."
+            echo "Canonical schema baseline already exists."
           fi
 
       - name: Run project checks
