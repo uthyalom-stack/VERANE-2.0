@@ -16,6 +16,10 @@ export const addressSchema = z.object({
 export const listAddresses = (db: Db, userId: string) => db.select().from(addresses).where(eq(addresses.userId, userId)).orderBy(desc(addresses.isDefault), desc(addresses.createdAt));
 
 export async function saveAddress(db: Db, userId: string, raw: unknown, id?: string) {
+  if (id) {
+    const [existing] = await db.select({ id: addresses.id }).from(addresses).where(and(eq(addresses.id, id), eq(addresses.userId, userId)));
+    if (!existing) throw new AppError("NOT_FOUND", "Address not found");
+  }
   const a = addressSchema.parse(raw);
   const row = { userId, label: a.label ?? null, recipientName: a.recipientName, phone: a.phone, line1: a.line1, line2: a.line2 ?? null, city: a.city, state: a.state, postalCode: a.postalCode ?? null, country: "NG", isDefault: !!a.isDefault };
   await db.transaction(async (tx) => {
