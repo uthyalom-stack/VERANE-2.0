@@ -17,7 +17,7 @@ export async function storeUpload(db: Db, storage: MediaStorage, actor: Actor, i
   const key = `${s.kind}/${(await sha256Hex(`${actor.userId}:${input.uploadId}`)).slice(0, 32)}.${s.ext}`;
   const [existing] = await db.select().from(mediaAssets).where(eq(mediaAssets.storageKey, key));
   if (existing) return existing;
-  await storage.put(key, input.bytes, s.mime);
+  await storage.put(key, new Uint8Array(input.bytes).buffer as ArrayBuffer, s.mime);
   const [row] = await db.insert(mediaAssets).values({ brandId: input.brandId, storageKey: key, kind: s.kind, mimeType: s.mime, byteSize: input.bytes.byteLength, width: s.width ?? null, height: s.height ?? null, altText: input.altText?.trim() || null, uploadedBy: actor.userId }).onConflictDoNothing().returning();
   await writeAudit(db, { actorUserId: actor.userId, action: "media.upload", entityType: "media", entityId: row?.id ?? key, brandId: input.brandId, after: { key, kind: s.kind, bytes: input.bytes.byteLength } });
   return row ?? (await db.select().from(mediaAssets).where(eq(mediaAssets.storageKey, key)))[0]!;
