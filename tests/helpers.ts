@@ -1,5 +1,4 @@
 import { rmSync } from "node:fs";
-import { sql } from "drizzle-orm";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createDb } from "@/infrastructure/db/client";
@@ -12,7 +11,6 @@ import { hashPassword } from "@/lib/crypto";
 export async function makeTestDb() {
   const file = path.join(tmpdir(), `verane-test-${crypto.randomUUID()}.db`);
   const { db, client } = createDb(`file:${file}`);
-  await db.run(sql`PRAGMA busy_timeout = 500`);
   await applyMigrations(db);
   await reconcileRbac(db);
   return { db, cleanup: () => { client.close(); rmSync(file, { force: true }); } };
