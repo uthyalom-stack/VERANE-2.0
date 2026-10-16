@@ -1,4 +1,4 @@
 export * from "./Container";
-export * from "./Button";
+export { LegacyButton as Button } from "./legacy-button";
 export * from "./Link";
-export * from "./Media";
+export { LegacyMedia as Media } from "./legacy-media";
