@@ -15,12 +15,12 @@ function isSqliteBusy(error: unknown): boolean {
   return e?.code === "SQLITE_BUSY" || e?.rawCode === 5 || /database is locked/i.test(e?.message ?? "");
 }
 
-async function retryBusy<T>(work: () => Promise<T>, attempts = 12): Promise<T> {
+async function retryBusy<T>(work: () => Promise<T>, attempts = 20): Promise<T> {
   for (let attempt = 0; ; attempt++) {
     try { return await work(); }
     catch (error) {
       if (!isSqliteBusy(error) || attempt >= attempts) throw error;
-      await new Promise((resolve) => setTimeout(resolve, 5 * (attempt + 1) + Math.floor(Math.random() * 15)));
+      await new Promise((resolve) => setTimeout(resolve, 5 + Math.floor(Math.random() * 35)));
     }
   }
 }
@@ -51,7 +51,7 @@ export async function setInitialStock(db: Db, variantId: string, quantity: numbe
     if (!fresh) return;
     await tx.insert(inventoryLevels).values({ variantId, onHand: quantity, reserved: 0 })
       .onConflictDoUpdate({ target: inventoryLevels.variantId, set: { onHand: quantity, reserved: 0, updatedAt: new Date() } });
-  }, { behavior: "immediate" }));
+  }));
 }
 
 export async function reserveStock(db: Db, lines: StockLine[], ref: string): Promise<void> {
@@ -91,6 +91,7 @@ export async function releaseReservation(db: Db, lines: StockLine[], ref: string
 export async function commitSale(db: Db, lines: StockLine[], ref: string): Promise<{ applied: boolean }> {
   let applied = false;
   await retryBusy(() => db.transaction(async (tx) => {
+    applied = false;
     for (const l of lines) {
       const fresh = await claimKey(tx, `sale:${ref}:${l.variantId}`, {
         variantId: l.variantId, type: "sale", onHandDelta: -l.quantity, reservedDelta: -l.quantity, referenceType: "order", referenceId: ref,
