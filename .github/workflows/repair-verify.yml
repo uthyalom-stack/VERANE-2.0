@@ -41,7 +41,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if ! git diff --quiet -- drizzle_generated; then
+          if [ -n "$(git status --porcelain -- drizzle_generated)" ]; then
             git add drizzle_generated
             git commit -m "chore(db): generate canonical schema snapshot"
             git push origin HEAD:fix/storefront-schema-repair
