@@ -608,24 +608,8 @@ CREATE TABLE `notifications` (
 );
 --> statement-breakpoint
 CREATE INDEX `notif_user_idx` ON `notifications` (`user_id`,`read_at`);--> statement-breakpoint
-PRAGMA foreign_keys=OFF;--> statement-breakpoint
-CREATE TABLE `__new_audit_logs` (
-	`id` text PRIMARY KEY NOT NULL,
-	`actor_user_id` text,
-	`brand_id` text,
-	`action` text NOT NULL,
-	`entity_type` text NOT NULL,
-	`entity_id` text,
-	`metadata` text,
-	`before_json` text,
-	`after_json` text,
-	`created_at` integer NOT NULL
-);
---> statement-breakpoint
-INSERT INTO `__new_audit_logs`("id", "actor_user_id", "brand_id", "action", "entity_type", "entity_id", "metadata", "before_json", "after_json", "created_at") SELECT "id", "actor_user_id", "brand_id", "action", "entity_type", "entity_id", "metadata", "before_json", "after_json", "created_at" FROM `audit_logs`;--> statement-breakpoint
-DROP TABLE `audit_logs`;--> statement-breakpoint
-ALTER TABLE `__new_audit_logs` RENAME TO `audit_logs`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;--> statement-breakpoint
+ALTER TABLE `audit_logs` ADD `before_json` text;--> statement-breakpoint
+ALTER TABLE `audit_logs` ADD `after_json` text;--> statement-breakpoint
 CREATE INDEX `audit_entity_idx` ON `audit_logs` (`entity_type`,`entity_id`);--> statement-breakpoint
 CREATE INDEX `audit_actor_idx` ON `audit_logs` (`actor_user_id`,`created_at`);--> statement-breakpoint
 ALTER TABLE `admin_profiles` ADD `display_name` text DEFAULT '' NOT NULL;--> statement-breakpoint
