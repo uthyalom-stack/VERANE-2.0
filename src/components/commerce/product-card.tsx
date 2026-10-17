@@ -23,7 +23,10 @@ export function ProductCard({ item }: { item: CardData }) {
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.16em] text-muted">{brand.name}</p>
           <h3 className="mt-2 text-base leading-snug transition-colors duration-[var(--dur-2)] group-hover:text-[var(--accent)] md:text-lg">{p.name}</h3>
-          {item.colors.length > 0 && <p className="mt-3 text-xs text-muted">{item.colors.length === 1 ? item.colors[0] : `${item.colors.length} colours`}</p>}
+          {item.colorSwatches.length > 0 && <div className="mt-3 flex items-center gap-2.5">
+            <ul aria-label="Available colours" className="flex items-center -space-x-1.5">{item.colorSwatches.slice(0, 5).map((c) => <li key={c.name} title={c.name} className="product-card__swatch"><span style={{ backgroundColor: c.hex ?? "var(--surface)" }} /><span className="sr-only">{c.name}</span></li>)}</ul>
+            <span className="text-xs text-muted">{item.colorSwatches.length === 1 ? item.colorSwatches[0]!.name : `${item.colorSwatches.length} colours`}{item.colorSwatches.length > 5 ? ` +${item.colorSwatches.length - 5}` : ""}</span>
+          </div>}
         </div>
         <div className="shrink-0 text-right text-sm">
           {onSale && <span className="mb-1 block text-xs text-muted line-through">{formatMoney(p.compareAtPrice!, p.currency)}</span>}
