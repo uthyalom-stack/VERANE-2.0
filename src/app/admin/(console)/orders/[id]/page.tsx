@@ -42,7 +42,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
       })}
     </Panel>}
     {manage && <Panel title="Fulfilment">
-      {shipments.length === 0 ? (o.paymentStatus === "paid" ? <form action={createShipmentAction.bind(null, o.id)}><Button>Create shipment</Button></form> : <p className="text-sm text-muted">Shipment can be created once the order is paid.</p>)
+      {shipments.length === 0 ? (fulfillments.some((f) => f.method === "pickup") ? <p className="text-sm text-muted">This is a pickup order. Use the Brand fulfilment panel to mark it ready for pickup and confirm collection.</p> : o.paymentStatus === "paid" ? <form action={createShipmentAction.bind(null, o.id)}><Button>Create shipment</Button></form> : <p className="text-sm text-muted">Shipment can be created once the order is paid.</p>)
         : <Table head={["Carrier", "Status", "Tracking"]} rows={shipments.map((s) => [s.carrier, s.status.replace(/_/g, " "), s.trackingNumber ?? "—"])} />}
       <div className="mt-6 max-w-md"><ActionForm action={updateOrderStatusAction} submitLabel="Update status" hidden={{ orderId: o.id }} fields={[{ name: "status", label: "Move to", type: "select", options: [["processing", "Processing"], ["shipped", "Shipped"], ["delivered", "Delivered"], ["cancelled", "Cancelled"], ["refunded", "Refunded"]] }, { name: "note", label: "Note", required: false }]} /></div></Panel>}
     <Panel title="Timeline"><Table head={["When", "Change", "Note"]} rows={history.map((h) => [when(h.createdAt), `${h.fromStatus ?? "—"} → ${h.toStatus}`, h.note ?? ""])} /></Panel></div>);
