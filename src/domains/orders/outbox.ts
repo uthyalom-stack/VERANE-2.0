@@ -32,7 +32,7 @@ export async function processEmailOutbox(db: Db, provider: EmailProvider, cfg: {
         const b = p.orderId ? await loadOrderBundle(db, p.orderId) : null;
         if (!b) throw new Error("order missing");
         const url = `${cfg.appUrl}/orders/${b.order.orderNumber}`;
-        msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: i.productName, qty: i.quantity, line: i.lineTotal })), url })
+        msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: `${i.productName}${i.isPreOrder ? ` (Pre-order${i.fulfillmentTimeSnapshot ? ` — ${i.fulfillmentTimeSnapshot}` : ""})` : ""}`, qty: i.quantity, line: i.lineTotal })), url })
           : row.template === "admin_new_order" ? templates.adminNewOrder(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, url: `${cfg.appUrl}/admin/orders/${b.order.id}` })
           : row.template === "shipping_update" ? templates.shippingUpdate(to, { orderNumber: b.order.orderNumber, status: p.shipmentStatus ?? "updated", trackingUrl: p.trackingUrl ?? null, url })
           : null;
