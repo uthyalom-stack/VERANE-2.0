@@ -169,3 +169,18 @@ p { max-width: 62ch; text-wrap: pretty; }
   .house-product-panel { padding-top: .75rem; }
   .house-product-layout { gap: 1.75rem; }
 }
+
+
+/* Editorial index pages share one rhythm without flattening each story into a card grid. */
+.house-index-intro { padding-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+.house-index-card { display: block; min-width: 0; }
+.house-index-card__media { isolation: isolate; }
+.house-index-card__media img { transition: transform 900ms var(--ease), filter 600ms var(--ease); }
+.house-index-card:hover .house-index-card__media img { transform: scale(1.035); }
+.house-index-card__media::after { content: ""; position: absolute; inset: 0; border: 1px solid rgb(255 255 255 / .07); border-radius: inherit; pointer-events: none; }
+.house-journal-lead { padding-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+footer { position: relative; }
+footer::before { content: ""; display: block; height: 1px; width: 100%; background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 48%, transparent), transparent); }
+footer > div:first-child > div:first-child p:first-child { letter-spacing: .24em; }
+footer nav a { width: fit-content; transition: color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+footer nav a:hover { transform: translateX(3px); }
