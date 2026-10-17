@@ -1,6 +1,7 @@
 import Link from "next/link";
-import { and, eq, isNull, lte, or } from "drizzle-orm";
+import { and, eq, lte, or } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
+import { publiclyVisible } from "@/domains/catalog/public";
 import { collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, brands, mediaAssets, productVariants, products } from "@/infrastructure/db/schema";
 import { Media } from "@/components/ui/media";
 
@@ -10,8 +11,7 @@ export default async function CollaborationsPage() {
   const db = getDb();
   const now = new Date();
   const rows = await db.select().from(collaborations).where(or(
-    and(eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))),
-    and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now)),
+    or(eq(collaborations.status, "published"), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now))),
   ));
 
   const cards = await Promise.all(rows.map(async (collab) => {
@@ -28,8 +28,8 @@ export default async function CollaborationsPage() {
     ));
 
     const validProducts = (await Promise.all(publishedProducts.map(async (item) => {
-      const [a] = await db.select().from(products).where(and(eq(products.id, item.brandAProductId), eq(products.status, "published")));
-      const [b] = await db.select().from(products).where(and(eq(products.id, item.brandBProductId), eq(products.status, "published")));
+      const [a] = await db.select().from(products).where(and(eq(products.id, item.brandAProductId), publiclyVisible(now)));
+      const [b] = await db.select().from(products).where(and(eq(products.id, item.brandBProductId), publiclyVisible(now)));
       if (!a || !b) return null;
       const pairs = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, item.id));
       for (const pair of pairs) {
