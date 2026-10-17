@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   verify:
@@ -19,7 +19,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          persist-credentials: true
+          persist-credentials: false
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -33,44 +33,13 @@ jobs:
       - name: Generate a forward migration from the preserved migration history
         run: npm run db:generate
 
-      - name: Capture generated Drizzle migration for repair
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: drizzle-generated-diff
-          path: |
-            drizzle/0005_*.sql
-            drizzle/meta/0005_snapshot.json
-          if-no-files-found: ignore
-
       - name: Confirm the forward migration history exists
         run: node -e 'const j = JSON.parse(require("node:fs").readFileSync("drizzle/meta/_journal.json", "utf8")); if (j.entries.length < 3) { console.error("Drizzle did not append a forward migration"); process.exit(1); }'
 
-      - name: Reconcile the V1 parity migration snapshot
+      - name: Verify the schema migration is committed
         run: |
-          generated_sql="$(find drizzle -maxdepth 1 -name '0005_*.sql' -print -quit)"
-          generated_snapshot="drizzle/meta/0005_snapshot.json"
           if [ -n "$(git status --porcelain -- drizzle)" ]; then
-            if [ -z "$generated_sql" ] || [ ! -f "$generated_snapshot" ]; then
-              echo "::error::Drizzle reported schema drift but its generated migration/snapshot could not be found."
-              git status --short -- drizzle
-              exit 1
-            fi
-            # The parity migration was initially added without a Drizzle snapshot.
-            # Squash the generated forward diff into the single forward migration
-            # so fresh databases apply each column/table exactly once.
-            cp "$generated_sql" drizzle/0003_v1_parity_features.sql
-            cp "$generated_snapshot" drizzle/meta/0003_snapshot.json
-            rm -f drizzle/0004_cart_custom_measurements.sql "$generated_sql" "$generated_snapshot"
-            node -e 'const fs=require("node:fs");const p="drizzle/meta/_journal.json";const j=JSON.parse(fs.readFileSync(p,"utf8"));j.entries=j.entries.filter(e=>e.idx<4);fs.writeFileSync(p,JSON.stringify(j,null,2)+"\n");'
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add -A drizzle
-            git commit -m "Align V1 parity migration and snapshot"
-            git push origin "HEAD:${GITHUB_HEAD_REF}"
-          fi
-          if [ -n "$(git status --porcelain -- drizzle)" ]; then
-            echo "::error::Migration reconciliation left uncommitted Drizzle files."
+            echo "::error::Drizzle generated an uncommitted migration. Review and commit it explicitly."
             git status --short -- drizzle
             exit 1
           fi
