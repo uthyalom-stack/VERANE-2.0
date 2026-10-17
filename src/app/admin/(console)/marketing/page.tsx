@@ -40,7 +40,7 @@ export default async function MarketingAdminPage() {
           <li>Generate platform-specific captions and creative from the saved brand context.</li>
           <li>Review and edit every draft before approval.</li>
           <li>Publish or schedule approved posts only after the relevant social account is connected.</li>
-          <li>Campaign attribution is implemented in VÉRANE. Use Analytics to review recorded storefront activity and paid-order sales metrics; totals respect the viewer's brand permissions.</li>
+          <li>Campaign attribution is implemented in VÉRANE. Use Analytics to review recorded storefront activity and paid-order sales metrics; totals respect the viewer&apos;s brand permissions.</li>
         </ol>
       </Panel>
     </div>
