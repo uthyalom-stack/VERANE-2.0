@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CollaborationsPage() {
   const db = getDb(); const now = new Date();
-  const rows = await db.select().from(collaborations).where(and(eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))));
+  const rows = await db.select().from(collaborations).where(or(and(eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now))));
   const cards = await Promise.all(rows.map(async (collab) => {
     const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collab.id), eq(collaborationRequests.status, "accepted")));
     const [brand] = collab.brandId ? await db.select().from(brands).where(eq(brands.id, collab.brandId)) : [];
