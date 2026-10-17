@@ -1,4 +1,4 @@
-import { eq, inArray, desc } from "drizzle-orm";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
 import { inventoryLevels, productCategories, productVariants, products, slugRedirects, brands } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
@@ -74,6 +74,27 @@ export async function archiveProduct(db: Db, actor: Actor, productId: string) {
   assertCan(actor, "catalog.product.write", existing.brandId);
   await db.update(products).set({ status: "archived", archivedAt: new Date() }).where(eq(products.id, productId));
   await writeAudit(db, { actorUserId: actor.userId, action: "product.archive", entityType: "product", entityId: productId, brandId: existing.brandId, before: { status: existing.status } });
+}
+
+/** Restore an archived product as a draft; restoration never silently republishes it. */
+export async function restoreProduct(db: Db, actor: Actor, productId: string) {
+  const [existing] = await db.select().from(products).where(eq(products.id, productId));
+  if (!existing) throw new AppError("NOT_FOUND", "Product not found");
+  assertCan(actor, "catalog.product.write", existing.brandId);
+  if (existing.status !== "archived") throw new AppError("CONFLICT", "Only archived products can be restored");
+  await db.update(products).set({ status: "draft", archivedAt: null, updatedAt: new Date() }).where(eq(products.id, productId));
+  await writeAudit(db, { actorUserId: actor.userId, action: "product.restore", entityType: "product", entityId: productId, brandId: existing.brandId, before: { status: existing.status }, after: { status: "draft" } });
+  await reindexProduct(db, productId);
+}
+
+/** Dedicated archive history, scoped to the actor's authorized brands. */
+export async function listArchivedProductsForAdmin(db: Db, actor: Actor, opts: { limit?: number } = {}) {
+  const scope = scopedBrandIds(actor, "catalog.product.read");
+  if (scope !== "all" && scope.length === 0) return [];
+  const condition = scope === "all"
+    ? eq(products.status, "archived")
+    : and(eq(products.status, "archived"), inArray(products.brandId, scope));
+  return db.select().from(products).where(condition).orderBy(desc(products.archivedAt), desc(products.updatedAt)).limit(Math.min(opts.limit ?? 100, 200));
 }
 
 export async function getProductForAdmin(db: Db, actor: Actor, productId: string) {
