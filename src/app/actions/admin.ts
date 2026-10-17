@@ -401,6 +401,7 @@ export async function addCollaborationVariantAction(_: ActionState, f: FormData)
     const collaborationProductId = r.collaborationProductId;
     const [cp] = await db.select().from(collaborationProducts).where(eq(collaborationProducts.id, collaborationProductId!));
     if (!cp) throw new AppError("NOT_FOUND", "Collaboration product not found");
+    if (cp.status === "published") throw new AppError("CONFLICT", "Unpublish the collaboration product before changing its paired variants");
     const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, cp.collaborationId));
     if (!collab) throw new AppError("NOT_FOUND", "Collaboration not found");
     assertCan(actor, "content.write", collab.brandId);
