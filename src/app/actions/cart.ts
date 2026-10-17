@@ -150,12 +150,10 @@ export async function quoteShippingAction(form: Record<string, string>): Promise
     const groups = [...new Map(view.lines.map((line) => [line.brandId, { brandId: line.brandId, brandName: line.brandName }])).values()];
     const out: QuoteOption[] = [];
     let firstDeliveryError: unknown = null;
-    const provider = getShippingProvider();
-
     for (const group of groups) {
       const lines = view.lines.filter((line) => line.brandId === group.brandId);
       try {
-        const deliveryOptions = await quoteShipping(provider, { ...a, country: "NG" }, lines.map((line) => ({
+        const deliveryOptions = await quoteShipping(getShippingProvider(), { ...a, country: "NG" }, lines.map((line) => ({
           name: line.name, quantity: line.quantity, unitPriceMinor: line.unitPrice,
         })));
         for (const option of deliveryOptions) {
