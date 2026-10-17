@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -389,5 +389,31 @@ export async function removeCollaborationVariantAction(_: ActionState, f: FormDa
     await db.delete(collaborationProductVariants).where(eq(collaborationProductVariants.id, variant.id));
     revalidatePath(`/admin/collaborations/${cp.collaborationId}`);
     return { ok: true, message: "Paired variant removed" };
+  });
+}
+
+
+export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const [fulfilment] = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.id, r.fulfilmentId!));
+    if (!fulfilment) throw new AppError("NOT_FOUND", "Fulfilment record not found");
+    assertCan(actor, "orders.manage", fulfilment.brandId);
+    const [order] = await db.select().from((await import("@/infrastructure/db/schema")).orders).where(eq((await import("@/infrastructure/db/schema")).orders.id, fulfilment.orderId));
+    if (!order) throw new AppError("NOT_FOUND", "Order not found");
+    if (order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Fulfilment can only begin after payment is confirmed");
+    const next = r.status;
+    const allowed = fulfilment.method === "pickup"
+      ? (fulfilment.status === "unfulfilled" ? ["processing", "cancelled"] : fulfilment.status === "processing" ? ["ready_for_pickup", "cancelled"] : fulfilment.status === "ready_for_pickup" ? ["delivered"] : [])
+      : (fulfilment.status === "unfulfilled" ? ["processing", "cancelled"] : fulfilment.status === "processing" ? ["shipped", "cancelled"] : fulfilment.status === "shipped" ? ["delivered"] : []);
+    if (!allowed.includes(next)) throw new AppError("CONFLICT", `Cannot move ${fulfilment.method} fulfilment from ${fulfilment.status} to ${next}`);
+    await db.update(orderBrandFulfilments).set({
+      status: next as "unfulfilled" | "processing" | "ready_for_pickup" | "shipped" | "delivered" | "cancelled",
+      fulfilledAt: next === "delivered" ? new Date() : null,
+      updatedAt: new Date(),
+    }).where(eq(orderBrandFulfilments.id, fulfilment.id));
+    await writeAudit(db, { actorUserId: actor.userId, action: "order.brand_fulfilment.update", entityType: "order", entityId: fulfilment.orderId, brandId: fulfilment.brandId, before: { status: fulfilment.status }, after: { status: next, method: fulfilment.method } });
+    revalidatePath(`/admin/orders/${fulfilment.orderId}`);
+    return { ok: true, message: "Brand fulfilment updated" };
   });
 }
