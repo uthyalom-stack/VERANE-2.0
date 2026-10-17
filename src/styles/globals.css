@@ -153,3 +153,19 @@ p { max-width: 62ch; text-wrap: pretty; }
 .house-brand-manifesto > div { position: relative; }
 .house-brand-manifesto > div::before { content: ""; position: absolute; top: -1.5rem; left: 0; width: 3rem; height: 1px; background: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .house-shop-intro__glow { filter: none; } }
+
+
+/* Product detail: a quiet purchase panel beside a tactile image gallery. */
+.house-product-layout { align-items: start; }
+.house-product-layout > :first-child > div { border: 1px solid color-mix(in oklab, var(--fg) 7%, transparent); }
+.house-product-layout > :first-child img { transition: transform 800ms var(--ease); }
+.house-product-layout > :first-child button:hover img { transform: scale(1.025); }
+.house-product-panel { padding-top: .25rem; }
+.house-product-details details summary { min-height: 2.5rem; align-items: center; gap: 1rem; }
+.house-product-details details summary::-webkit-details-marker { display: none; }
+.house-product-details details[open] summary { color: var(--accent); }
+.house-product-details details p { max-width: 52ch; line-height: 1.75; }
+@media (max-width: 767px) {
+  .house-product-panel { padding-top: .75rem; }
+  .house-product-layout { gap: 1.75rem; }
+}
