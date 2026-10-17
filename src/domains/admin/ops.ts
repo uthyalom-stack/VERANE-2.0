@@ -70,11 +70,12 @@ export async function listSubscribers(db: Db, actor: Actor, limit = 200) {
   const q = db.select().from(newsletterSubscriptions).orderBy(desc(newsletterSubscriptions.createdAt)).limit(limit);
   return scope === "all" ? q : q.where(inArray(newsletterSubscriptions.brandId, scope));
 }
-export async function analyticsSummary(db: Db, actor: Actor, days = 30) {
+export async function analyticsSummary(db: Db, actor: Actor, days = 30, range?: { from: number; to: number }) {
   const scope = scopedBrandIds(actor, "analytics.read");
   if (scope !== "all" && scope.length === 0) return [];
-  const since = Date.now() - days * 86400_000;
-  const base = db.select({ name: analyticsEvents.name, n: sql<number>`count(*)` }).from(analyticsEvents).where(sql`${analyticsEvents.createdAt} >= ${since} ${scope === "all" ? sql`` : sql`AND ${analyticsEvents.brandId} IN (${sql.join(scope.map((s) => sql`${s}`), sql`, `)})`}`).groupBy(analyticsEvents.name);
+  const from = range?.from ?? Date.now() - days * 86400_000;
+  const to = range?.to ?? Date.now();
+  const base = db.select({ name: analyticsEvents.name, n: sql<number>`count(*)` }).from(analyticsEvents).where(sql`${analyticsEvents.createdAt} >= ${from} AND ${analyticsEvents.createdAt} < ${to} ${scope === "all" ? sql`` : sql`AND ${analyticsEvents.brandId} IN (${sql.join(scope.map((s) => sql`${s}`), sql`, `)})`}`).groupBy(analyticsEvents.name);
   return base;
 }
 export function integrationStatus(env: Env, actor: Actor) {
