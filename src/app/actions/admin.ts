@@ -332,6 +332,7 @@ export async function saveCollaborationProductAction(_: ActionState, f: FormData
     assertCan(actor, "content.write", request.toBrandId);
     const brandAProductId = r.brandAProductId;
     const brandBProductId = r.brandBProductId;
+    if (!brandAProductId || !brandBProductId) throw new AppError("VALIDATION", "Choose a source product from each brand");
     const [a] = await db.select().from(products).where(eq(products.id, brandAProductId));
     const [b] = await db.select().from(products).where(eq(products.id, brandBProductId));
     if (!a || !b || a.brandId !== request.fromBrandId || b.brandId !== request.toBrandId) {
