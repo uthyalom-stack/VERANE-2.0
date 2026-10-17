@@ -10,6 +10,7 @@ const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
 
 export default async function Analytics() {
   const { db, actor } = await adminCtx();
+  // eslint-disable-next-line react-hooks/purity -- this server-rendered report intentionally uses the request-time window
   const since = Date.now() - WINDOW_MS;
   const scope = scopedBrandIds(actor, "analytics.read");
   const canRead = scope === "all" || scope.length > 0;
