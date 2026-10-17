@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq, lte, or } from "drizzle-orm";
+import { and, eq, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
-import { brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, products, productVariants } from "@/infrastructure/db/schema";
+import { brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, mediaAssets, products, productVariants } from "@/infrastructure/db/schema";
 import { formatMoney } from "@/lib/money";
 import { Media } from "@/components/ui/media";
 
@@ -10,13 +10,14 @@ export const dynamic = "force-dynamic";
 
 export default async function CollaborationPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params; const db = getDb(); const now = new Date();
-  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), eq(collaborations.status, "published"), or(eq(collaborations.publishAt, null as never), lte(collaborations.publishAt, now))));
+  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))));
   if (!collab) notFound();
   const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collab.id), eq(collaborationRequests.status, "accepted")));
   if (!request) notFound();
   const [from] = await db.select().from(brands).where(eq(brands.id, request.fromBrandId));
   const [to] = await db.select().from(brands).where(eq(brands.id, request.toBrandId));
   if (!from || !to) notFound();
+  const [cover] = collab.coverMediaId ? await db.select().from(mediaAssets).where(eq(mediaAssets.id, collab.coverMediaId)) : [];
   const items = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.collaborationId, collab.id), eq(collaborationProducts.status, "published")));
   const cards = await Promise.all(items.map(async (item) => {
     const [a] = await db.select().from(products).where(eq(products.id, item.brandAProductId));
@@ -30,7 +31,7 @@ export default async function CollaborationPage({ params }: { params: Promise<{ 
   return <main className="mx-auto max-w-7xl px-5 pb-24 pt-28 md:px-10">
     <Link href="/collaborations" className="text-sm text-muted underline underline-offset-4">All collaborations</Link>
     <p className="house-kicker mt-8">{from.name} × {to.name}</p><h1 className="display mt-4 max-w-4xl text-6xl md:text-8xl">{collab.title}</h1>
-    {collab.coverMediaId ? <div className="mt-8 max-w-5xl overflow-hidden rounded-[var(--r-md)] bg-surface"><Media mediaId={collab.coverMediaId} alt={collab.title} /></div> : null}
+    {collab.coverMediaId ? <div className="mt-8 max-w-5xl overflow-hidden rounded-[var(--r-md)] bg-surface">{cover ? <Media storageKey={cover.storageKey} alt={collab.title} /> : null}</div> : null}
     {collab.description ? <p className="mt-8 max-w-2xl text-base leading-relaxed text-muted">{collab.description}</p> : null}
     <div className="mt-12 grid gap-6 md:grid-cols-2">{visible.map(({ item, a, b, variants, aVariant, bVariant }) => <article key={item.id} className="rounded-[var(--r-md)] border border-line p-6">
       <p className="house-kicker">Collaboration product</p><h2 className="display mt-3 text-3xl">{item.name}</h2>{item.description ? <p className="mt-3 text-sm leading-relaxed text-muted">{item.description}</p> : null}
