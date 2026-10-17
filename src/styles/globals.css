@@ -215,3 +215,18 @@ footer nav a:hover { transform: translateX(3px); }
 .house-search-form { border-color: var(--glass-line); }
 .house-search-form input { color: var(--fg); }
 .house-search-form:focus-within { border-color: color-mix(in oklab, var(--accent) 50%, transparent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent), inset 0 1px 0 rgb(255 255 255 / .18); }
+
+
+/* The shared header stays quiet over campaign imagery and gains glass as the page moves on. */
+.house-site-header { will-change: background, backdrop-filter; }
+.house-wordmark { position: relative; transition: letter-spacing var(--dur-3) var(--ease), color var(--dur-2) var(--ease); }
+.house-wordmark:hover { letter-spacing: .25em; color: var(--accent); }
+.house-site-header nav a { transition: color var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease); }
+.house-site-header nav a[aria-current="page"] { text-decoration-color: var(--accent); text-underline-offset: .5rem; }
+.house-menu-button { transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease); }
+.house-menu-button:hover { border-color: color-mix(in oklab, var(--accent) 60%, transparent); color: var(--accent); }
+.house-mobile-menu { background: color-mix(in oklab, var(--bg) 90%, transparent); }
+.house-mobile-menu__nav a { width: fit-content; max-width: 100%; transition: color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+.house-mobile-menu__nav a:hover { color: var(--accent); transform: translateX(5px); }
+.house-mobile-menu__nav a[href*="/brands/alomziee"] { color: color-mix(in oklab, var(--fg) 84%, #e4ff3a); }
+@media (prefers-reduced-motion: reduce) { .house-wordmark, .house-site-header nav a, .house-menu-button, .house-mobile-menu__nav a { transition: none; } }
