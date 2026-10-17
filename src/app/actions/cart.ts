@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { getDb } from "@/infrastructure/db/client";
+import { eq } from "drizzle-orm";
 import { getEnv } from "@/lib/env";
 import { addToCart, applyDiscountCode, getCartView, setCartQuantity, type CartView } from "@/domains/cart";
 import { startCheckout, checkoutInput } from "@/domains/orders";
@@ -93,6 +94,18 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
       callbackUrl: `${env.APP_URL}/checkout/return`,
     });
     const r = await startCheckout(getDb(), getPaymentProvider(), input, new Date(), { pepper: env.TOKEN_PEPPER, ...tax() });
+    const cookieStore = await cookies();
+    const campaignId = cookieStore.get("vr_campaign")?.value;
+    const visitorHash = cookieStore.get("vr_visitor")?.value;
+    if (campaignId) {
+      const [campaign] = await getDb().select().from(trackingCampaigns).where(eq(trackingCampaigns.id, campaignId));
+      if (campaign?.isActive) {
+        await getDb().insert(orderAttributions).values({
+          orderId: r.orderId, campaignId: campaign.id, brandId: campaign.brandId,
+          visitorHash: visitorHash ?? null, model: "last_touch",
+        }).onConflictDoNothing();
+      }
+    }
     void trackServer({ name: "checkout_start", entityType: "order", entityId: r.orderId, props: { total: r.total } });
     (await cookies()).set("vr_order_access", `${r.orderNumber}.${r.publicToken}`, { httpOnly: true, secure: env.APP_URL.startsWith("https://"), sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
     url = r.authorizationUrl;
