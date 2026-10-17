@@ -18,7 +18,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const { orderNumber } = await params; const { payment } = await searchParams;
   const b = await getOrderForViewer(getDb(), orderNumber, await viewerFromCookies(orderNumber), getEnv().TOKEN_PEPPER);
   if (!b) notFound(); // 404 for both "doesn't exist" and "not yours"
-  const { order: o, items, shipments, history } = b; const c = o.currency;
+  const { order: o, items, shipments, history, fulfillments } = b; const c = o.currency;
   const banner = o.paymentStatus === "paid" ? { t: "Thank you. Your payment is confirmed.", tone: "text-accent" }
     : payment === "retry_failed" ? { t: "This payment can no longer be retried (the reservation may have expired). Please start a new checkout from your bag.", tone: "text-red-400" }
     : payment === "failed" ? { t: "Your payment didn't go through. You can try again below.", tone: "text-red-400" }
@@ -38,6 +38,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
           <div className="flex justify-between"><dt className="text-muted">Delivery</dt><dd>{formatMoney(o.shippingTotal, c)}</dd></div>
           <div className="mt-2 flex justify-between border-t border-line pt-2 text-lg"><dt>Total</dt><dd>{formatMoney(o.total, c)}</dd></div></dl></section>
       {shipments.length > 0 && <section className="mt-12"><h2 className="display text-3xl">Delivery</h2>{shipments.map((s) => <p key={s.id} className="mt-3 text-sm">{s.carrier ?? "Carrier"} · {s.status.replace(/_/g, " ")}{s.trackingNumber && ` · ${s.trackingNumber}`}{s.trackingUrl && <> · <a className="underline" href={s.trackingUrl} rel="noopener noreferrer">Track</a></>}</p>)}</section>}
+      {fulfillments.some((f) => f.method === "pickup") && <section className="mt-12"><h2 className="display text-3xl">Pickup details</h2>{fulfillments.filter((f) => f.method === "pickup").map((f) => { let p: Record<string, string> | null = null; try { p = f.pickupLocationSnapshot ? JSON.parse(f.pickupLocationSnapshot) as Record<string, string> : null; } catch { p = null; } return <div key={f.id} className="mt-4 rounded-[var(--r-md)] border border-line p-4"><p className="font-medium">{p?.name ?? "Pickup location"}</p><p className="mt-2 text-sm text-muted">{p ? [p.addressLine1, p.addressLine2, p.city, p.state, p.postalCode].filter(Boolean).join(", ") : "Your pickup location is saved with this order."}</p>{p?.instructions ? <p className="mt-2 text-sm">{p.instructions}</p> : null}<p className="mt-3 text-xs text-muted">Status: {f.status.replace(/_/g, " ")}</p></div>; })}</section>}
       <section className="mt-12"><h2 className="display text-3xl">Timeline</h2><ol className="mt-4 grid gap-2 text-sm">{history.map((h) => <li key={h.id} className="flex gap-3"><time className="w-40 text-muted" dateTime={h.createdAt.toISOString()}>{h.createdAt.toLocaleString("en-NG")}</time><span>{LABEL[h.toStatus] ?? h.toStatus}{h.note && ` — ${h.note}`}</span></li>)}</ol></section>
       <div className="mt-12 flex gap-3"><ButtonLink href="/shop" variant="outline">Continue shopping</ButtonLink><Link href="/account/orders" className="min-h-11 px-4 py-3 text-sm underline">All orders</Link></div>
     </div>
