@@ -268,7 +268,7 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
     if (!request) throw new AppError("CONFLICT", "An accepted partner request is required");
     assertCan(actor, "content.write", request.fromBrandId); assertCan(actor, "content.write", request.toBrandId);
     const title = (r.title ?? "").trim(); const slug = (r.slug ?? "").trim().toLowerCase();
-    const description = (r.description ?? "").trim(); const status = r.status;
+    const description = (r.description ?? "").trim(); const status = r.status ?? "";
     if (title.length < 3 || title.length > 160) throw new AppError("VALIDATION", "Title must be 3–160 characters");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 100) throw new AppError("VALIDATION", "Use a URL-safe slug with letters, numbers and hyphens");
     if (description.length > 3000) throw new AppError("VALIDATION", "Description is too long");
@@ -339,7 +339,7 @@ export async function saveCollaborationProductAction(_: ActionState, f: FormData
       throw new AppError("VALIDATION", "Choose one product from the requesting brand and one from the partner brand");
     }
     if (a.id === b.id) throw new AppError("VALIDATION", "Choose two different source products");
-    const status = r.status === "published" ? "published" : r.status === "archived" ? "archived" : "draft";
+    const status: "draft" | "published" | "archived" = r.status === "published" ? "published" : r.status === "archived" ? "archived" : "draft";
     if (status === "published") {
       if (a.status !== "published" || b.status !== "published") throw new AppError("CONFLICT", "Both source products must be published first");
       const variants = id ? await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, id)) : [];
