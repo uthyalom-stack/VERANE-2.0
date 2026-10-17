@@ -27,7 +27,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     destination: campaign.destination,
     referrerHost,
   });
-  const response = NextResponse.redirect(new URL(campaign.destination, request.url), 302);
+  const destination = campaign.destination.startsWith("/") && !campaign.destination.startsWith("//") && !campaign.destination.includes("\\") ? campaign.destination : "/";
+  const response = NextResponse.redirect(new URL(destination, request.url), 302);
   response.cookies.set("vr_visitor", visitorHash, { httpOnly: true, secure: new URL(request.url).protocol === "https:", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 180 });
   response.cookies.set("vr_campaign", campaign.id, { httpOnly: true, secure: new URL(request.url).protocol === "https:", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
   return response;
