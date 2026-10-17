@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CollaborationPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params; const db = getDb(); const now = new Date();
-  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))));
+  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), or(and(eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now)))));
   if (!collab) notFound();
   const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collab.id), eq(collaborationRequests.status, "accepted")));
   if (!request) notFound();
