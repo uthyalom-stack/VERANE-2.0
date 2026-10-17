@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type FormEvent } from "react";
 import { subscribeBackInStockAction } from "@/app/actions/parity";
 
 type Option = { id: string; size: string | null; colorName: string | null };
@@ -12,7 +12,7 @@ export function BackInStockForm({ productId, variants }: { productId: string; va
   const [success, setSuccess] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
     setSuccess(false);
