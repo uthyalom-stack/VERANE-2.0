@@ -278,3 +278,7 @@ footer nav a:hover { transform: translateX(3px); }
   .product-card__quick-panel > div { gap: .35rem; }
   .product-card__quick-panel > div > button { min-height: 2rem; padding: .4rem .55rem; font-size: 10px; }
 }
+
+.product-card__swatch { display: grid; size: 1.1rem; width: 1.1rem; height: 1.1rem; place-items: center; overflow: hidden; border: 1px solid color-mix(in oklab, var(--fg) 42%, transparent); border-radius: 999px; background: var(--bg); box-shadow: 0 0 0 2px var(--bg); }
+.product-card__swatch > span:first-child { display: block; width: 100%; height: 100%; border-radius: inherit; }
+.product-card__swatch[title="White"] > span:first-child, .product-card__swatch[title="Ivory"] > span:first-child, .product-card__swatch[title="Cream"] > span:first-child { border: 1px solid rgb(0 0 0 / .15); }
