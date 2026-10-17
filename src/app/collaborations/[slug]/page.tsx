@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, eq, isNull, lte, or } from "drizzle-orm";
+import { and, eq, lte, or } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
+import { isPubliclyVisibleProduct } from "@/domains/catalog/public";
 import { brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, mediaAssets, products, productVariants } from "@/infrastructure/db/schema";
 import { formatMoney } from "@/lib/money";
 import { Media } from "@/components/ui/media";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CollaborationPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params; const db = getDb(); const now = new Date();
-  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), or(and(eq(collaborations.status, "published"), or(isNull(collaborations.publishAt), lte(collaborations.publishAt, now))), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now)))));
+  const [collab] = await db.select().from(collaborations).where(and(eq(collaborations.slug, slug), or(eq(collaborations.status, "published"), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now)))));
   if (!collab) notFound();
   const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collab.id), eq(collaborationRequests.status, "accepted")));
   if (!request) notFound();
@@ -31,7 +32,7 @@ export default async function CollaborationPage({ params }: { params: Promise<{ 
     return { item, a, b, variants, variantPairs };
   }));
   const visible = cards.map((x) => ({ ...x, variantPairs: x.variantPairs.filter((pair) => pair.aVariant?.isActive === true && pair.bVariant?.isActive === true) }))
-    .filter((x) => x.a?.status === "published" && x.b?.status === "published" && x.variantPairs.length > 0);
+    .filter((x) => !!x.a && !!x.b && isPubliclyVisibleProduct(x.a, now) && isPubliclyVisibleProduct(x.b, now) && x.variantPairs.length > 0);
   return <main className="mx-auto max-w-7xl px-5 pb-24 pt-28 md:px-10">
     <Link href="/collaborations" className="text-sm text-muted underline underline-offset-4">All collaborations</Link>
     <p className="house-kicker mt-8">{from.name} × {to.name}</p><h1 className="display mt-4 max-w-4xl text-6xl md:text-8xl">{collab.title}</h1>
