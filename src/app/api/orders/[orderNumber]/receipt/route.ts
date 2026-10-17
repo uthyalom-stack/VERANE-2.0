@@ -103,7 +103,10 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderNumbe
     "Keep this receipt for your records.",
   ];
 
-  return new Response(makePdf(lines), {
+  const pdf = makePdf(lines);
+  const body = new ArrayBuffer(pdf.byteLength);
+  new Uint8Array(body).set(pdf);
+  return new Response(body, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
