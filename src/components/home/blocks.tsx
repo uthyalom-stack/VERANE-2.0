@@ -67,7 +67,7 @@ function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Aw
         })}
       </div>
       <div className="house-hero__statement pointer-events-none absolute inset-x-0 top-1/2 z-20 hidden -translate-y-1/2 justify-center px-8 lg:flex">
-        <div className="pointer-events-auto max-w-2xl text-center">
+        <div className="house-hero__glass pointer-events-auto max-w-3xl rounded-[2rem] border border-white/25 bg-black/25 px-7 py-9 text-center shadow-[0_24px_90px_rgba(0,0,0,0.28)] backdrop-blur-2xl md:px-14 md:py-12">
           <p className="mb-5 text-[10px] uppercase tracking-[0.35em] text-white/75">An independent digital fashion house</p>
           <h1 className="display text-[clamp(3.4rem,7vw,7.5rem)] leading-[0.86] text-white">{str(data.title, "Two Brands. One Expression.")}</h1>
           <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-white/75">{str(data.subtitle, "Two distinct creative worlds. One considered point of view.")}</p>
