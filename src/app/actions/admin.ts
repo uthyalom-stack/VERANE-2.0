@@ -301,7 +301,7 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
       const [cover] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, coverMediaId));
       if (!cover || cover.kind !== "image" || (cover.brandId && cover.brandId !== collab.brandId)) throw new AppError("VALIDATION", "Choose an image from this collaboration's brand media library");
     }
-    if (status === "published") {
+    if (status === "published" || status === "scheduled") {
       const published = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.collaborationId, collab.id), eq(collaborationProducts.status, "published")));
       let hasPublicProduct = false;
       for (const item of published) {
