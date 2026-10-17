@@ -38,7 +38,6 @@ export function SiteHeader({ cartCount, signedIn }: { cartCount: number; signedI
     return () => window.removeEventListener("scroll", f);
   }, []);
 
-  useEffect(() => { setOpen(false); }, [path]);
 
   useEffect(() => {
     if (!open) {
