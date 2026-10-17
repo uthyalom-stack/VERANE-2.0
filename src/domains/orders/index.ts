@@ -50,7 +50,7 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
         status: "pending_payment", paymentStatus: "pending", subtotal: p.subtotal, discountTotal: p.discountTotal, shippingTotal: p.shippingTotal, taxTotal: p.taxTotal, total: p.total,
         discountCode: cart?.discountCode ?? null, shippingAddressJson: input.address, shippingOptionJson: input.shipping, reservationExpiresAt: new Date(now.getTime() + RESERVATION_MS), cartId: input.cartId, publicTokenHash: await sha256Hex(publicToken, pepper),
       });
-      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal });
+      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal, fulfillmentTimeSnapshot: l.isPreOrder ? l.fulfillmentTime : null });
       await tx.insert(paymentAttempts).values({ orderId, provider: provider.name, reference, amount: p.total, currency: view.currency });
       await tx.insert(orderStatusHistory).values({ orderId, fromStatus: null, toStatus: "pending_payment", note: "Order created" });
     });
