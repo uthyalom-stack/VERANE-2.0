@@ -3,7 +3,7 @@ export const PAGE_BLOCKS: Record<string, BlockDef> = {
   hero: { label: "Campaign hero (split)", fields: [{ name: "title", label: "Title" }, { name: "subtitle", label: "Subtitle" }, { name: "ctaLabel", label: "Button label" }, { name: "ctaHref", label: "Button link", hint: "/shop or https://…" }] },
   campaign_hero: { label: "Campaign hero (from Campaigns)", fields: [{ name: "slug", label: "Campaign slug", hint: "Uses the campaign's desktop/mobile media, title and button." }] },
   brand_intro: { label: "Brand introductions", fields: [] },
-  product_rail: { label: "Product rail", fields: [{ name: "title", label: "Title" }, { name: "source", label: "Source", type: "select", options: ["newest", "featured"] }, { name: "limit", label: "How many (1–24)", type: "number" }] },
+  product_rail: { label: "Product rail", fields: [{ name: "title", label: "Title" }, { name: "source", label: "Source", type: "select", options: ["newest", "featured", "discounted"] }, { name: "limit", label: "How many (1–24)", type: "number" }] },
   collection_feature: { label: "Featured collection", fields: [{ name: "slug", label: "Collection slug" }] },
   look_feature: { label: "Shop the Look feature", fields: [{ name: "slug", label: "Look slug" }] },
   editorial_rail: { label: "Journal stories", fields: [{ name: "title", label: "Title" }, { name: "limit", label: "How many (1–6)", type: "number" }] },
