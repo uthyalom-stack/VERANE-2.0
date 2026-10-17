@@ -83,7 +83,7 @@ export default async function Analytics() {
           <p className="display mt-2 text-5xl">{paidOrders.count}</p>
         </div>
         <div className="rounded-[var(--r-md)] border border-line p-5">
-          <p className="text-sm text-muted">Paid revenue</p>
+          <p className="text-sm text-muted">{scope === "all" ? "Paid revenue (orders)" : "Paid item revenue (brand)"}</p>
           <p className="display mt-2 text-4xl md:text-5xl">{formatMoney(paidOrders.revenue)}</p>
         </div>
       </div>
