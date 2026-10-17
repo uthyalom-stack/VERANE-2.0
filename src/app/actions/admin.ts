@@ -156,7 +156,7 @@ export async function saveTrackingLinkAction(_: ActionState, f: FormData): Promi
     const destination = (r.destination ?? "/").trim();
     if (name.length < 2 || name.length > 120) throw new AppError("VALIDATION", "Campaign name must be 2–120 characters");
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) throw new AppError("VALIDATION", "Use a URL-safe slug with letters, numbers and hyphens");
-    if (!destination.startsWith("/") || destination.startsWith("//") || destination.includes("\\\\") || /[\\r\\n]/.test(destination)) throw new AppError("VALIDATION", "Destination must be a safe on-site path beginning with /");
+    if (!destination.startsWith("/") || destination.startsWith("//") || destination.includes(String.fromCharCode(92)) || destination.includes("\n") || destination.includes("\r")) throw new AppError("VALIDATION", "Destination must be a safe on-site path beginning with /");
     const patch = { brandId, name, slug, platform: (r.platform || "Other").slice(0, 40), source: nul(r.source), medium: nul(r.medium), destination, isActive: r.isActive === "on", updatedAt: new Date() };
     const id = nul(r.id);
     if (id) {
