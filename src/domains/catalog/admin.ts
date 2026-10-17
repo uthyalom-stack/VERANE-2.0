@@ -115,7 +115,7 @@ export async function listProductsForAdmin(db: Db, actor: Actor, opts: { limit?:
 function rowFrom(id: string, i: ProductInput, slug: string): typeof products.$inferInsert {
   return {
     id, brandId: i.brandId, slug, name: i.name, subtitle: i.subtitle ?? null, description: i.description ?? null,
-    materials: i.materials ?? null, fit: i.fit ?? null, sizingInfo: i.sizingInfo ?? null, customSizingEnabled: i.customSizingEnabled, preOrderEnabled: i.preOrderEnabled, fulfillmentTime: i.fulfillmentTime ?? null, careInstructions: i.careInstructions ?? null,
+    materials: i.materials ?? null, fit: i.fit ?? null, sizingInfo: i.sizingInfo ?? null, sizeGuideMediaId: i.sizeGuideMediaId ?? null, customSizingEnabled: i.customSizingEnabled, preOrderEnabled: i.preOrderEnabled, fulfillmentTime: i.fulfillmentTime ?? null, careInstructions: i.careInstructions ?? null,
     deliveryInfo: i.deliveryInfo ?? null, productType: i.productType ?? null, style: i.style ?? null, occasion: i.occasion ?? null,
     currency: i.currency, basePrice: i.basePrice, compareAtPrice: i.compareAtPrice ?? null, status: i.status,
     publishAt: i.publishAt ?? null, isFeatured: i.isFeatured, seoTitle: i.seoTitle ?? null, seoDescription: i.seoDescription ?? null,
