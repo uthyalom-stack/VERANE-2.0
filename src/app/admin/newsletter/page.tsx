@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { desc } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
-import { brands, newsletterSubscriptions } from "@/infrastructure/db/schema";
+import { brands } from "@/infrastructure/db/schema";
 import { listSubscribers } from "@/domains/admin/ops";
 import { requireAdmin } from "@/lib/http/session";
 
