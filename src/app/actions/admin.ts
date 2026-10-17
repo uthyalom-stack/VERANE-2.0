@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, orders, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -399,7 +399,7 @@ export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): 
     const [fulfilment] = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.id, r.fulfilmentId!));
     if (!fulfilment) throw new AppError("NOT_FOUND", "Fulfilment record not found");
     assertCan(actor, "orders.manage", fulfilment.brandId);
-    const [order] = await db.select().from((await import("@/infrastructure/db/schema")).orders).where(eq((await import("@/infrastructure/db/schema")).orders.id, fulfilment.orderId));
+    const [order] = await db.select().from(orders).where(eq(orders.id, fulfilment.orderId));
     if (!order) throw new AppError("NOT_FOUND", "Order not found");
     if (order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Fulfilment can only begin after payment is confirmed");
     const next = r.status;
