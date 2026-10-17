@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { addToBagAction } from "@/app/actions/cart";
 import { BAG_CHANGED, BAG_OPEN } from "./bag-drawer";
 
@@ -18,6 +18,7 @@ export type QuickAddVariant = {
 export function ProductQuickAdd({ productName, variants }: { productName: string; variants: QuickAddVariant[] }) {
   const sellable = (v: QuickAddVariant) => v.available > 0 || v.allowBackorder;
   const options = variants.filter(sellable);
+  const panelId = useId();
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(options[0]?.id ?? "");
   const [message, setMessage] = useState("");
@@ -44,11 +45,11 @@ export function ProductQuickAdd({ productName, variants }: { productName: string
 
   return (
     <div className="product-card__quick-add-wrap" onClick={(e) => e.stopPropagation()}>
-      <button type="button" aria-expanded={open} aria-label={`Quick add ${productName}`} onClick={() => { setOpen((v) => !v); setMessage(""); }} className="product-card__quick-add rounded-full px-4 py-3 text-[10px] uppercase tracking-[0.14em]">
+      <button type="button" aria-expanded={open} aria-controls={panelId} aria-label={open ? `Close quick add options for ${productName}` : `Quick add ${productName}`} onClick={() => { setOpen((v) => !v); setMessage(""); }} className="product-card__quick-add rounded-full px-4 py-3 text-[10px] uppercase tracking-[0.14em]">
         {open ? "Close" : "Quick add"} <span aria-hidden="true">{open ? "−" : "+"}</span>
       </button>
       {open && (
-        <div className="product-card__quick-panel glass absolute inset-x-2 bottom-14 z-20 rounded-[var(--r-md)] p-3 sm:inset-x-3 sm:p-4" role="group" aria-label={`Options for ${productName}`}>
+        <div id={panelId} className="product-card__quick-panel glass absolute inset-x-2 bottom-14 z-20 rounded-[var(--r-md)] p-3 sm:inset-x-3 sm:p-4" role="group" aria-label={`Options for ${productName}`}>
           <p className="mb-3 text-[10px] uppercase tracking-[0.16em] text-muted">Choose an option</p>
           <div className="flex max-h-36 flex-wrap gap-2 overflow-y-auto">
             {variants.map((v) => {
