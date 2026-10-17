@@ -23,14 +23,20 @@ export async function processEmailOutbox(db: Db, provider: EmailProvider, cfg: {
     try {
       const to = row.toEmail === "@admin" ? cfg.adminEmail : row.toEmail;
       if (!to) { await db.update(emailOutbox).set({ status: "sent", lastError: "no recipient configured", sentAt: now }).where(eq(emailOutbox.id, row.id)); continue; }
-      const p = row.payloadJson as { orderId?: string; shipmentStatus?: string; trackingUrl?: string | null };
-      const b = p.orderId ? await loadOrderBundle(db, p.orderId) : null;
-      if (!b) throw new Error("order missing");
-      const url = `${cfg.appUrl}/orders/${b.order.orderNumber}`;
-      const msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: i.productName, qty: i.quantity, line: i.lineTotal })), url })
-        : row.template === "admin_new_order" ? templates.adminNewOrder(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, url: `${cfg.appUrl}/admin/orders/${b.order.id}` })
-        : row.template === "shipping_update" ? templates.shippingUpdate(to, { orderNumber: b.order.orderNumber, status: p.shipmentStatus ?? "updated", trackingUrl: p.trackingUrl ?? null, url })
-        : null;
+      const p = row.payloadJson as { orderId?: string; shipmentStatus?: string; trackingUrl?: string | null; productName?: string; productSlug?: string; brandSlug?: string };
+      let msg;
+      if (row.template === "back_in_stock") {
+        if (!p.productName || !p.productSlug || !p.brandSlug) throw new Error("back-in-stock payload incomplete");
+        msg = templates.backInStock(to, { productName: p.productName, url: `${cfg.appUrl}/product/${p.productSlug}?brand=${p.brandSlug}` });
+      } else {
+        const b = p.orderId ? await loadOrderBundle(db, p.orderId) : null;
+        if (!b) throw new Error("order missing");
+        const url = `${cfg.appUrl}/orders/${b.order.orderNumber}`;
+        msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: i.productName, qty: i.quantity, line: i.lineTotal })), url })
+          : row.template === "admin_new_order" ? templates.adminNewOrder(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, url: `${cfg.appUrl}/admin/orders/${b.order.id}` })
+          : row.template === "shipping_update" ? templates.shippingUpdate(to, { orderNumber: b.order.orderNumber, status: p.shipmentStatus ?? "updated", trackingUrl: p.trackingUrl ?? null, url })
+          : null;
+      }
       if (!msg) throw new Error(`unknown template ${row.template}`);
       await provider.send(msg);
       await db.update(emailOutbox).set({ status: "sent", sentAt: now, attempts: row.attempts + 1, lastError: null }).where(eq(emailOutbox.id, row.id));
