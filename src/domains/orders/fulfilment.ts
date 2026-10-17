@@ -87,8 +87,19 @@ export async function pollShipments(db: Db, provider: ShippingProvider): Promise
       if (t.status === s.status) continue;
       await db.update(shippingRecords).set({ status: t.status, trackingUrl: t.trackingUrl ?? s.trackingUrl }).where(eq(shippingRecords.id, s.id));
       await db.insert(emailOutbox).values({ dedupeKey: `ship:${s.id}:${t.status}`, template: "shipping_update", toEmail: (await db.select().from(orders).where(eq(orders.id, s.orderId)))[0]?.email ?? "", payloadJson: { orderId: s.orderId, shipmentStatus: t.status.replace(/_/g, " "), trackingUrl: t.trackingUrl ?? s.trackingUrl } }).onConflictDoNothing();
-      if (t.status === "in_transit") { await db.update(orderBrandFulfilments).set({ status: "shipped", updatedAt: new Date() }).where(and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.method, "delivery"))); await setOrderStatus(db, s.orderId, "shipped", "In transit", null).catch(() => undefined); }
-      if (t.status === "delivered") { await db.update(orderBrandFulfilments).set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() }).where(and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.method, "delivery"))); await setOrderStatus(db, s.orderId, "shipped", "In transit", null).catch(() => undefined); await setOrderStatus(db, s.orderId, "delivered", "Delivered", null).catch(() => undefined); }
+      const targetFulfilment = s.brandId
+        ? and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.brandId, s.brandId), eq(orderBrandFulfilments.method, "delivery"))
+        : and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.method, "delivery"));
+      if (t.status === "in_transit") {
+        await db.update(orderBrandFulfilments).set({ status: "shipped", updatedAt: new Date() }).where(targetFulfilment);
+        const all = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, s.orderId));
+        if (all.length && all.every((row) => row.status === "shipped" || row.status === "delivered")) await setOrderStatus(db, s.orderId, "shipped", "All brand shipments in transit", null).catch(() => undefined);
+      }
+      if (t.status === "delivered") {
+        await db.update(orderBrandFulfilments).set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() }).where(targetFulfilment);
+        const all = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, s.orderId));
+        if (all.length && all.every((row) => row.status === "delivered")) await setOrderStatus(db, s.orderId, "delivered", "All brand fulfilments delivered", null).catch(() => undefined);
+      }
       changed++;
     } catch { /* provider hiccup: retry on next tick */ }
   }
