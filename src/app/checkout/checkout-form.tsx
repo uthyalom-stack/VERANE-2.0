@@ -96,7 +96,7 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
         {options && !pricedPricing && <p className="mt-2 text-xs text-muted">Updating the total for your fulfilment choices…</p>}
         <p role="alert" className="mt-4 min-h-5 text-sm text-red-400">{err}</p>
         <Button className="mt-2 w-full" onClick={pay} disabled={!readyToPay || pending}>{pending ? "Starting payment…" : readyToPay ? `Pay ${formatMoney(pricedPricing!.total, view.currency)}` : "Choose fulfilment for every brand"}</Button>
-        <p className="mt-3 text-xs text-muted">Each brand's delivery or pickup choice and fee are confirmed by the server before payment. Carrier rates are checked again before a shipment label is created.</p></aside>
+        <p className="mt-3 text-xs text-muted">Each brand&apos;s delivery or pickup choice and fee are confirmed by the server before payment. Carrier rates are checked again before a shipment label is created.</p></aside>
     </div>
   );
 }
