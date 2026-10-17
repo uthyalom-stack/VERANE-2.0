@@ -25,6 +25,7 @@ const productInputBase = z.object({
   materials: z.string().max(2000).nullable().optional(),
   fit: z.string().max(2000).nullable().optional(),
   sizingInfo: z.string().max(2000).nullable().optional(),
+  sizeGuideMediaId: z.string().max(64).nullable().optional(),
   customSizingEnabled: z.boolean().default(false),
   preOrderEnabled: z.boolean().default(false),
   fulfillmentTime: z.string().trim().max(120).nullable().optional(),
