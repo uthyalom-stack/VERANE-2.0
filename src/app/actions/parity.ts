@@ -49,13 +49,22 @@ export async function subscribeBackInStockAction(input: {
     }
 
     const user = await getCurrentUser();
-    await db.insert(backInStockSubscriptions).values({
-      productId: parsed.productId,
-      variantId: parsed.variantId,
-      userId: user?.kind === "customer" ? user.id : null,
-      email: parsed.email,
-      status: "active",
-    }).onConflictDoNothing();
+    const [existing] = await db.select().from(backInStockSubscriptions).where(and(
+      eq(backInStockSubscriptions.productId, parsed.productId),
+      eq(backInStockSubscriptions.variantId, parsed.variantId),
+      eq(backInStockSubscriptions.email, parsed.email),
+    ));
+    if (existing) {
+      await db.update(backInStockSubscriptions).set({ userId: user?.kind === "customer" ? user.id : existing.userId, status: "active", notifiedAt: null, updatedAt: new Date() }).where(eq(backInStockSubscriptions.id, existing.id));
+    } else {
+      await db.insert(backInStockSubscriptions).values({
+        productId: parsed.productId,
+        variantId: parsed.variantId,
+        userId: user?.kind === "customer" ? user.id : null,
+        email: parsed.email,
+        status: "active",
+      }).onConflictDoNothing();
+    }
 
     return { ok: true, message: "You're on the list. We'll email you when this option is back in stock." };
   });
