@@ -12,7 +12,7 @@ export default async function OperationsAdminPage() {
   const { db, actor } = await adminCtx();
   const [allBrands, campaignVisits] = await Promise.all([
     db.select().from(brands).where(eq(brands.isActive, true)),
-    db.select({ campaignId: trackingCampaignVisits.campaignId, visits: sql<number>\`count(*)\` }).from(trackingCampaignVisits).groupBy(trackingCampaignVisits.campaignId),
+    db.select({ campaignId: trackingCampaignVisits.campaignId, visits: sql<number>`count(*)` }).from(trackingCampaignVisits).groupBy(trackingCampaignVisits.campaignId),
   ]);
   const contentScope = scopedBrandIds(actor, "content.write");
   const orderScope = scopedBrandIds(actor, "orders.manage");
