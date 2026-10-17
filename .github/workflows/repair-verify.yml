@@ -33,6 +33,10 @@ jobs:
       - name: Generate a forward migration from the preserved migration history
         run: npm run db:generate
 
+      - name: Emit generated snapshot chunks for migration repair
+        run: |
+          node -e 'const fs=require("node:fs");const p="drizzle/meta/0005_snapshot.json";if(!fs.existsSync(p))process.exit(0);const s=JSON.stringify(JSON.parse(fs.readFileSync(p,"utf8")));for(let i=0;i<s.length;i+=5000)console.log("DRIZZLE_SNAPSHOT_CHUNK:"+i+":"+s.slice(i,i+5000));'
+
       - name: Confirm the forward migration history exists
         run: node -e 'const j = JSON.parse(require("node:fs").readFileSync("drizzle/meta/_journal.json", "utf8")); if (j.entries.length < 3) { console.error("Drizzle did not append a forward migration"); process.exit(1); }'
 
