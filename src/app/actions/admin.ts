@@ -20,6 +20,7 @@ import { updateAlt } from "@/domains/media";
 import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, mediaAssets, orderBrandFulfilments, orders, pages, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
+import { isPubliclyVisibleProduct, publiclyVisible } from "@/domains/catalog/public";
 
 const money = (v: string | undefined) => (v && v.trim() ? parseMajorToMinor(v.replace(/,/g, "")) : null);
 const dateOrNull = (v: string | undefined) => (v && v.trim() ? v : null);
@@ -293,8 +294,8 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
       const published = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.collaborationId, collab.id), eq(collaborationProducts.status, "published")));
       let hasPublicProduct = false;
       for (const item of published) {
-        const [a] = await db.select().from(products).where(and(eq(products.id, item.brandAProductId), eq(products.status, "published")));
-        const [b] = await db.select().from(products).where(and(eq(products.id, item.brandBProductId), eq(products.status, "published")));
+        const [a] = await db.select().from(products).where(and(eq(products.id, item.brandAProductId), publiclyVisible()));
+        const [b] = await db.select().from(products).where(and(eq(products.id, item.brandBProductId), publiclyVisible()));
         if (!a || !b) continue;
         const pairs = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, item.id));
         for (const pair of pairs) {
@@ -352,7 +353,7 @@ export async function saveCollaborationProductAction(_: ActionState, f: FormData
     if (a.id === b.id) throw new AppError("VALIDATION", "Choose two different source products");
     const status: "draft" | "published" | "archived" = r.status === "published" ? "published" : r.status === "archived" ? "archived" : "draft";
     if (status === "published") {
-      if (a.status !== "published" || b.status !== "published") throw new AppError("CONFLICT", "Both source products must be published first");
+      if (!isPubliclyVisibleProduct(a) || !isPubliclyVisibleProduct(b)) throw new AppError("CONFLICT", "Both source products must be publicly available first");
       const variants = id ? await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, id)) : [];
       if (variants.length === 0) throw new AppError("CONFLICT", "Add at least one paired variant before publishing");
       let validPairs = 0;
