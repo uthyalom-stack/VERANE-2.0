@@ -50,7 +50,7 @@ function SplitHero({ data, brands, siteName }: { data: Record<string, unknown>; 
           const editorial = copy[b.themeKey] ?? copy.uthy!;
           return (
             <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="house-panel group">
-              <EditorialImage brand={b.themeKey === "alomzie" ? "alomzie" : "uthy"} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
+              <EditorialImage brandSlug={b.slug} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
               <div aria-hidden="true" className="house-panel__shade absolute inset-0" />
               <div className="house-panel__meta absolute inset-x-6 top-24 z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-white/75 md:inset-x-10 md:top-28">
                 <span>{siteName} / {editorial.index}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span>
