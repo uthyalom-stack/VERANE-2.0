@@ -306,7 +306,7 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
         }
         if (hasPublicProduct) break;
       }
-      if (!hasPublicProduct) throw new AppError("CONFLICT", "Publish at least one collaboration product with active paired variants and two published source products before publishing the landing page");
+      if (!hasPublicProduct) throw new AppError("CONFLICT", "Publish at least one collaboration product with active paired variants and two publicly available source products before publishing the landing page");
     }
     const publishAt = r.publishAt?.trim() ? new Date(r.publishAt) : null;
     if (publishAt && Number.isNaN(publishAt.getTime())) throw new AppError("VALIDATION", "Enter a valid publication date");
