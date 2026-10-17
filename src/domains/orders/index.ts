@@ -1,7 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/infrastructure/db/client";
-import { carts, discounts, emailOutbox, orderItems, orderStatusHistory, orders, paymentAttempts, webhookEvents } from "@/infrastructure/db/schema";
+import { carts, discounts, emailOutbox, orderBrandFulfilments, orderItems, orderStatusHistory, orders, paymentAttempts, pickupLocations, webhookEvents } from "@/infrastructure/db/schema";
 import type { PaymentProvider } from "@/infrastructure/payments/types";
 import { AppError } from "@/lib/errors";
 import { randomToken, sha256Hex } from "@/lib/crypto";
@@ -18,7 +18,7 @@ export const checkoutInput = z.object({
   phone: z.string().trim().min(7).max(20),
   address: z.object({ recipientName: z.string().trim().min(2).max(120), line1: z.string().trim().min(3).max(200), line2: z.string().max(200).optional(), city: z.string().trim().min(2).max(80), state: z.string().trim().min(2).max(80), postalCode: z.string().max(20).optional(), country: z.literal("NG").default("NG") }),
   /** Shipping option chosen from a provider quote the SERVER re-fetched; amount here is re-checked by the caller against that quote. */
-  shipping: z.object({ id: z.string(), name: z.string(), amountMinor: z.number().int().min(0) }),
+  shipping: z.object({ id: z.string(), name: z.string(), amountMinor: z.number().int().min(0), meta: z.record(z.string(), z.unknown()).optional() }),
   callbackUrl: z.string().url(),
 });
 
@@ -35,11 +35,61 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
   if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
   if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable. Review your bag to continue.");
   if (view.discountError) throw new AppError("VALIDATION", view.discountError);
+  const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
+  const method = input.shipping.meta?.method;
+  const fulfillmentMethod = method === "pickup" ? "pickup" : "delivery";
+  let pickupLocation: typeof pickupLocations.$inferSelect | null = null;
+  const perBrandSchema = z.array(z.object({
+    brandId: z.string().min(1),
+    method: z.enum(["delivery", "pickup"]),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    amountMinor: z.number().int().min(0),
+    pickupLocationId: z.string().optional(),
+  }));
+  const perBrandSelections = method === "per_brand" ? perBrandSchema.parse(input.shipping.meta?.brandSelections) : null;
+  const pickupByBrand = new Map<string, typeof pickupLocations.$inferSelect>();
+
+  if (perBrandSelections) {
+    if (perBrandSelections.length !== brandIds.length || new Set(perBrandSelections.map((selection) => selection.brandId)).size !== brandIds.length ||
+        brandIds.some((brandId) => !perBrandSelections.some((selection) => selection.brandId === brandId))) {
+      throw new AppError("VALIDATION", "Choose exactly one fulfilment option for every brand in the order");
+    }
+    const selectedTotal = perBrandSelections.reduce((sum, selection) => sum + selection.amountMinor, 0);
+    if (!Number.isSafeInteger(selectedTotal) || selectedTotal !== input.shipping.amountMinor) {
+      throw new AppError("VALIDATION", "Brand fulfilment totals do not match the shipping amount");
+    }
+    for (const selection of perBrandSelections) {
+      if (selection.method === "pickup") {
+        if (selection.amountMinor !== 0 || !selection.pickupLocationId || selection.id !== `pickup:${selection.pickupLocationId}`) {
+          throw new AppError("VALIDATION", "Invalid pickup selection");
+        }
+        const [location] = await db.select().from(pickupLocations).where(and(
+          eq(pickupLocations.id, selection.pickupLocationId),
+          eq(pickupLocations.brandId, selection.brandId),
+          eq(pickupLocations.isActive, true),
+        ));
+        if (!location) throw new AppError("VALIDATION", "A selected pickup location is no longer available");
+        pickupByBrand.set(selection.brandId, location);
+      } else if (selection.pickupLocationId || selection.id.startsWith("pickup:")) {
+        throw new AppError("VALIDATION", "Invalid delivery selection");
+      }
+    }
+  } else if (fulfillmentMethod === "pickup") {
+    if (brandIds.length !== 1 || input.shipping.amountMinor !== 0) throw new AppError("VALIDATION", "Pickup is available only for a single-brand order and has no delivery fee");
+    const pickupLocationId = input.shipping.meta?.pickupLocationId;
+    if (typeof pickupLocationId !== "string") throw new AppError("VALIDATION", "Choose a pickup location");
+    const [location] = await db.select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
+    if (!location) throw new AppError("VALIDATION", "That pickup location is no longer available");
+    pickupLocation = location;
+  } else if (input.shipping.meta?.pickupLocationId) {
+    throw new AppError("VALIDATION", "Invalid delivery option");
+  }
   const orderId = crypto.randomUUID();
   const publicToken = randomToken(24);
   const number = orderNumber();
-  const lines = view.lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity }));
-  await reserveStock(db, lines, orderId); // atomic; throws OUT_OF_STOCK, nothing left reserved on failure
+  const lines = view.lines.filter((l) => !l.isPreOrder).map((l) => ({ variantId: l.variantId, quantity: l.quantity }));
+  if (lines.length) await reserveStock(db, lines, orderId); // atomic; throws OUT_OF_STOCK, nothing left reserved on failure
   const reference = `vr_${orderId.replace(/-/g, "").slice(0, 16)}_${randomToken(4)}`;
   const p = view.pricing;
   try {
@@ -50,7 +100,21 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
         status: "pending_payment", paymentStatus: "pending", subtotal: p.subtotal, discountTotal: p.discountTotal, shippingTotal: p.shippingTotal, taxTotal: p.taxTotal, total: p.total,
         discountCode: cart?.discountCode ?? null, shippingAddressJson: input.address, shippingOptionJson: input.shipping, reservationExpiresAt: new Date(now.getTime() + RESERVATION_MS), cartId: input.cartId, publicTokenHash: await sha256Hex(publicToken, pepper),
       });
-      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal });
+      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal, fulfillmentTimeSnapshot: l.isPreOrder ? l.fulfillmentTime : null });
+      for (const brandId of brandIds) {
+        const selection = perBrandSelections?.find((candidate) => candidate.brandId === brandId);
+        const selectedMethod = selection?.method ?? fulfillmentMethod;
+        const selectedPickup = selection?.method === "pickup" ? pickupByBrand.get(brandId) : pickupLocation;
+        await tx.insert(orderBrandFulfilments).values({
+          id: crypto.randomUUID(), orderId, brandId, method: selectedMethod, status: "unfulfilled",
+          pickupLocationId: selectedMethod === "pickup" ? selectedPickup!.id : null,
+          pickupLocationSnapshot: selectedMethod === "pickup" ? JSON.stringify({
+            name: selectedPickup!.name, addressLine1: selectedPickup!.addressLine1, addressLine2: selectedPickup!.addressLine2,
+            city: selectedPickup!.city, state: selectedPickup!.state, postalCode: selectedPickup!.postalCode,
+            country: selectedPickup!.country, instructions: selectedPickup!.instructions,
+          }) : null,
+        });
+      }
       await tx.insert(paymentAttempts).values({ orderId, provider: provider.name, reference, amount: p.total, currency: view.currency });
       await tx.insert(orderStatusHistory).values({ orderId, fromStatus: null, toStatus: "pending_payment", note: "Order created" });
     });
@@ -92,7 +156,8 @@ export async function finalizePayment(db: Db, provider: PaymentProvider, referen
   await db.update(paymentAttempts).set({ status: "success", verifiedAt: new Date(), providerTransactionId: v.providerTransactionId, rawResponseJson: v.raw }).where(and(eq(paymentAttempts.id, attempt.id), sql`${paymentAttempts.status} IN ('initialized','success')`));
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  await commitSale(db, items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), order.id); // exactly-once via idempotency keys
+  const stockedItems = items.filter((i) => !i.isPreOrder);
+  if (stockedItems.length) await commitSale(db, stockedItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), order.id); // pre-orders do not claim unavailable inventory
 
   // single-statement claim: only the first caller flips pending_payment -> paid, and only they do the side effects
   const flipped = await db.update(orders).set({ status: "paid", paymentStatus: "paid" }).where(and(eq(orders.id, order.id), eq(orders.status, "pending_payment")));
@@ -141,7 +206,8 @@ export async function expireStaleOrders(db: Db, now = new Date()): Promise<numbe
     const claimed = await db.update(orders).set({ status: "expired", paymentStatus: "cancelled" }).where(and(eq(orders.id, o.id), eq(orders.status, "pending_payment")));
     if (affected(claimed) === 0) continue;
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
-    await releaseReservation(db, items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), o.id);
+    const stockedItems = items.filter((i) => !i.isPreOrder);
+    if (stockedItems.length) await releaseReservation(db, stockedItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), o.id);
     await db.insert(orderStatusHistory).values({ orderId: o.id, fromStatus: "pending_payment", toStatus: "expired", note: "Reservation expired" });
     n++;
   }

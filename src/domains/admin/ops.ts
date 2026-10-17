@@ -70,11 +70,12 @@ export async function listSubscribers(db: Db, actor: Actor, limit = 200) {
   const q = db.select().from(newsletterSubscriptions).orderBy(desc(newsletterSubscriptions.createdAt)).limit(limit);
   return scope === "all" ? q : q.where(inArray(newsletterSubscriptions.brandId, scope));
 }
-export async function analyticsSummary(db: Db, actor: Actor, days = 30) {
+export async function analyticsSummary(db: Db, actor: Actor, days = 30, range?: { from: number; to: number }) {
   const scope = scopedBrandIds(actor, "analytics.read");
   if (scope !== "all" && scope.length === 0) return [];
-  const since = Date.now() - days * 86400_000;
-  const base = db.select({ name: analyticsEvents.name, n: sql<number>`count(*)` }).from(analyticsEvents).where(sql`${analyticsEvents.createdAt} >= ${since} ${scope === "all" ? sql`` : sql`AND ${analyticsEvents.brandId} IN (${sql.join(scope.map((s) => sql`${s}`), sql`, `)})`}`).groupBy(analyticsEvents.name);
+  const from = range?.from ?? Date.now() - days * 86400_000;
+  const to = range?.to ?? Date.now();
+  const base = db.select({ name: analyticsEvents.name, n: sql<number>`count(*)` }).from(analyticsEvents).where(sql`${analyticsEvents.createdAt} >= ${from} AND ${analyticsEvents.createdAt} < ${to} ${scope === "all" ? sql`` : sql`AND ${analyticsEvents.brandId} IN (${sql.join(scope.map((s) => sql`${s}`), sql`, `)})`}`).groupBy(analyticsEvents.name);
   return base;
 }
 export function integrationStatus(env: Env, actor: Actor) {
@@ -87,6 +88,7 @@ export function integrationStatus(env: Env, actor: Actor) {
     { name: "Shipping", driver: env.SHIPPING_DRIVER, status: env.SHIPPING_DRIVER === "shipbubble" ? yes(!!env.SHIPBUBBLE_API_KEY && !!env.SHIP_ORIGIN_ADDRESS) : "MOCK — not real rates" },
     { name: "Email", driver: env.EMAIL_DRIVER, status: env.EMAIL_DRIVER === "resend" ? yes(!!env.RESEND_API_KEY) : "CONSOLE — not delivered" },
     { name: "Media", driver: env.MEDIA_DRIVER, status: env.MEDIA_DRIVER === "r2" ? "R2 binding (verify in Cloudflare)" : "local disk (dev)" },
+    { name: "AI Marketing workspace", driver: env.MARKETING_AI_URL ? env.MARKETING_AI_URL : "not connected", status: yes(!!env.MARKETING_AI_URL) },
     { name: "Cron secret", driver: "Bearer", status: yes(!!env.CRON_SECRET) },
   ];
 }

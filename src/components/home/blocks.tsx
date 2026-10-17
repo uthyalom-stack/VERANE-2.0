@@ -14,21 +14,21 @@ type Block = { id: string; type: string; data: Record<string, unknown> };
 const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
 
 /** Block registry: the CMS stores `type` + `data`; unknown types are skipped, never crash the page. */
-export async function HomeBlocks({ db, blocks }: { db: Db; blocks: Block[] }) {
+export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Block[]; brandSlug?: string }) {
   const brands = await listBrands(db);
   return (
     <>
       {await Promise.all(blocks.map(async (b) => {
         switch (b.type) {
-          case "campaign_hero": return <CampaignHero key={b.id} db={db} data={b.data} />;
-          case "hero": return <SplitHero key={b.id} data={b.data} brands={brands} />;
-          case "brand_intro": return <BrandIntro key={b.id} brands={brands} />;
-          case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} />;
+          case "campaign_hero": return brandSlug ? null : <CampaignHero key={b.id} db={db} data={b.data} />;
+          case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} />;
+          case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} />;
+          case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "outfit_builder_intro": return <BuilderIntro key={b.id} />;
           case "newsletter": return <NewsletterSignup key={b.id} />;
-          case "collection_feature": return <CollectionFeature key={b.id} db={db} data={b.data} />;
-          case "look_feature": return <LookFeature key={b.id} db={db} data={b.data} />;
-          case "editorial_rail": return <EditorialRail key={b.id} db={db} data={b.data} />;
+          case "collection_feature": return <CollectionFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
+          case "look_feature": return <LookFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
+          case "editorial_rail": return <EditorialRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "promo": return <Promo key={b.id} data={b.data} />;
           default: return null;
         }
@@ -107,12 +107,13 @@ function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>>
   );
 }
 
-async function ProductRail({ db, data }: { db: Db; data: Record<string, unknown> }) {
+async function ProductRail({ db, data, brandSlug }: { db: Db; data: Record<string, unknown>; brandSlug?: string }) {
   const source = str(data.source, "newest");
   const title = str(data.title, source === "newest" ? "New arrivals" : source === "featured" ? "Trending now" : "Special price");
   const eyebrow = source === "newest" ? "Fresh from the house" : source === "featured" ? "In the spotlight" : "A little something off";
-  const shopHref = source === "discounted" ? "/shop?sale=true" : source === "featured" ? "/shop?featured=true&sort=featured" : "/shop?sort=newest";
+  const shopHref = brandSlug ? `/brands/${brandSlug}` : source === "discounted" ? "/shop?sale=true" : source === "featured" ? "/shop?featured=true&sort=featured" : "/shop?sort=newest";
   const { items } = await listShopProducts(db, {
+    ...(brandSlug ? { brand: brandSlug } : {}),
     sort: source === "newest" ? "newest" : "featured",
     ...(source === "featured" ? { featured: true } : {}),
     ...(source === "discounted" ? { sale: true } : {}),
@@ -139,25 +140,26 @@ function BuilderIntro() {
 function Promo({ data }: { data: Record<string, unknown> }) {
   return <section className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10"><div className="rounded-[var(--r-lg)] bg-accent p-10 text-accent-fg md:p-16"><h2 className="display text-4xl md:text-6xl">{str(data.title)}</h2>{str(data.body) && <p className="mt-3">{str(data.body)}</p>}{str(data.ctaHref) && <ButtonLink href={str(data.ctaHref)} variant="outline" className="mt-6 border-current text-current">{str(data.ctaLabel, "Learn more")}</ButtonLink>}</div></section>;
 }
-async function CollectionFeature({ db, data }: { db: Db; data: Record<string, unknown> }) {
-  const c = await getCollection(db, str(data.slug)); if (!c) return null;
+async function CollectionFeature({ db, data, brandSlug }: { db: Db; data: Record<string, unknown>; brandSlug?: string }) {
+  const c = await getCollection(db, str(data.slug), new Date(), brandSlug); if (!c) return null;
   return (
-    <section className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10"><div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">A world of its own</p><h2 className="display mt-3 text-4xl md:text-5xl">{c.collection.title}</h2></div><Link href={`/collections/${c.collection.slug}`} className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">View collection <span aria-hidden="true">↗</span></Link></div>
+    <section className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10"><div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">A world of its own</p><h2 className="display mt-3 text-4xl md:text-5xl">{c.collection.title}</h2></div><Link href={`/collections/${c.collection.slug}${brandSlug ? `?brand=${brandSlug}` : ""}`} className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">View collection <span aria-hidden="true">↗</span></Link></div>
       <div className="rail">{c.cards.slice(0, 8).map((x) => <ProductCard key={x.product.id} item={x} />)}</div></section>
   );
 }
-async function LookFeature({ db, data }: { db: Db; data: Record<string, unknown> }) {
-  const l = (await listLooks(db)).find((x) => x.look.slug === str(data.slug)) ?? (await listLooks(db))[0]; if (!l) return null;
+async function LookFeature({ db, data, brandSlug }: { db: Db; data: Record<string, unknown>; brandSlug?: string }) {
+  const availableLooks = await listLooks(db, brandSlug);
+  const l = availableLooks.find((x) => x.look.slug === str(data.slug)) ?? (brandSlug ? null : availableLooks[0]); if (!l) return null;
   return (
     <section className="house-look mx-auto mt-28 grid max-w-[1600px] gap-8 px-5 md:grid-cols-[1.05fr_.95fr] md:items-center md:gap-16 md:px-10" data-brand={l.brand.themeKey}>
       <div className="house-look__image aspect-[4/5] overflow-hidden rounded-[var(--r-md)] bg-surface">{l.image && <Media storageKey={l.image.storageKey} alt={l.image.altText ?? l.look.title} className="transition-transform duration-[var(--dur-3)] ease-[var(--ease)]" />}</div>
-      <div className="house-look__copy self-center py-4 md:py-10"><p className="house-kicker">Shop the look / {l.brand.name}</p><h2 className="display mt-4 text-5xl md:text-7xl">{l.look.title}</h2>{l.look.description && <p className="mt-5 max-w-lg leading-relaxed text-muted">{l.look.description}</p>}<ButtonLink href={`/looks/${l.look.slug}`} className="mt-7">Shop this look <span aria-hidden="true">↗</span></ButtonLink></div></section>
+      <div className="house-look__copy self-center py-4 md:py-10"><p className="house-kicker">Shop the look / {l.brand.name}</p><h2 className="display mt-4 text-5xl md:text-7xl">{l.look.title}</h2>{l.look.description && <p className="mt-5 max-w-lg leading-relaxed text-muted">{l.look.description}</p>}<ButtonLink href={`/looks/${l.look.slug}${brandSlug ? `?brand=${brandSlug}` : ""}`} className="mt-7">Shop this look <span aria-hidden="true">↗</span></ButtonLink></div></section>
   );
 }
-async function EditorialRail({ db, data }: { db: Db; data: Record<string, unknown> }) {
-  const list = await listArticles(db, { limit: Math.min(Number(data.limit) || 3, 6) }); if (!list.length) return null;
+async function EditorialRail({ db, data, brandSlug }: { db: Db; data: Record<string, unknown>; brandSlug?: string }) {
+  const list = await listArticles(db, { limit: Math.min(Number(data.limit) || 3, 6), brandSlug }); if (!list.length) return null;
   return (
-    <section className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10"><div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">Notes from the house</p><h2 className="display mt-3 text-4xl md:text-5xl">{str(data.title, "From the Journal")}</h2></div><Link href="/journal" className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">All stories <span aria-hidden="true">↗</span></Link></div>
+    <section className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10"><div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">Notes from the house</p><h2 className="display mt-3 text-4xl md:text-5xl">{str(data.title, "From the Journal")}</h2></div><Link href={brandSlug ? `/journal?brand=${brandSlug}` : "/journal"} className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">All stories <span aria-hidden="true">↗</span></Link></div>
       <div className="grid gap-6 md:grid-cols-3">{list.map(({ article, cover }, i) => <Link key={article.id} href={`/journal/${article.slug}`} className="house-story group"><div className="house-story__media relative aspect-[4/3] overflow-hidden rounded-[var(--r-md)] bg-surface">{cover && <Media storageKey={cover.storageKey} alt={cover.altText ?? article.title} className="transition-transform duration-[var(--dur-3)] ease-[var(--ease)] group-hover:scale-105" />}<span className="house-story__index absolute bottom-3 left-3 glass rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.16em]">0{i + 1} / Journal</span></div><p className="mt-4 text-[10px] uppercase tracking-[0.16em] text-muted">{article.kind.replace(/_/g, " ")}</p><h3 className="mt-2 max-w-[18ch] text-2xl leading-tight transition-colors duration-300 group-hover:text-[var(--accent)]">{article.title}</h3></Link>)}</div></section>
   );
 }

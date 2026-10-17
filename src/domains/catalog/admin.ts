@@ -1,6 +1,6 @@
-import { eq, inArray, desc } from "drizzle-orm";
+import { and, eq, inArray, desc } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
-import { inventoryLevels, productCategories, productVariants, products, slugRedirects, brands } from "@/infrastructure/db/schema";
+import { inventoryLevels, mediaAssets, productCategories, productVariants, products, slugRedirects, brands } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { assertCan, scopedBrandIds, type Actor } from "@/domains/authorization";
 import { writeAudit } from "@/domains/audit";
@@ -15,6 +15,7 @@ export async function createProduct(db: Db, actor: Actor, raw: unknown) {
     : undefined;
   assertCan(actor, "catalog.product.write", candidateBrandId ?? null);
   const input = productInput.parse(raw);
+  await assertSizeGuideMedia(db, input.sizeGuideMediaId ?? null, input.brandId);
   const [brand] = await db.select().from(brands).where(eq(brands.id, input.brandId));
   if (!brand?.isActive) throw new AppError("VALIDATION", "Unknown brand");
   const slug = resolveSlug(input);
@@ -54,6 +55,7 @@ export async function updateProduct(db: Db, actor: Actor, productId: string, raw
   assertCan(actor, "catalog.product.write", existing.brandId); // authorize before parsing client-controlled data
   const input = productInput.parse(raw);
   if (input.brandId !== existing.brandId) assertCan(actor, "catalog.product.write", input.brandId); // and target brand for moves
+  await assertSizeGuideMedia(db, input.sizeGuideMediaId ?? null, input.brandId);
   const slug = resolveSlug(input);
   await db.transaction(async (tx) => {
     const { id: _id, ...patch } = rowFrom(productId, input as ProductInput, slug);
@@ -76,6 +78,27 @@ export async function archiveProduct(db: Db, actor: Actor, productId: string) {
   await writeAudit(db, { actorUserId: actor.userId, action: "product.archive", entityType: "product", entityId: productId, brandId: existing.brandId, before: { status: existing.status } });
 }
 
+/** Restore an archived product as a draft; restoration never silently republishes it. */
+export async function restoreProduct(db: Db, actor: Actor, productId: string) {
+  const [existing] = await db.select().from(products).where(eq(products.id, productId));
+  if (!existing) throw new AppError("NOT_FOUND", "Product not found");
+  assertCan(actor, "catalog.product.write", existing.brandId);
+  if (existing.status !== "archived") throw new AppError("CONFLICT", "Only archived products can be restored");
+  await db.update(products).set({ status: "draft", archivedAt: null, updatedAt: new Date() }).where(eq(products.id, productId));
+  await writeAudit(db, { actorUserId: actor.userId, action: "product.restore", entityType: "product", entityId: productId, brandId: existing.brandId, before: { status: existing.status }, after: { status: "draft" } });
+  await reindexProduct(db, productId);
+}
+
+/** Dedicated archive history, scoped to the actor's authorized brands. */
+export async function listArchivedProductsForAdmin(db: Db, actor: Actor, opts: { limit?: number } = {}) {
+  const scope = scopedBrandIds(actor, "catalog.product.read");
+  if (scope !== "all" && scope.length === 0) return [];
+  const condition = scope === "all"
+    ? eq(products.status, "archived")
+    : and(eq(products.status, "archived"), inArray(products.brandId, scope));
+  return db.select().from(products).where(condition).orderBy(desc(products.archivedAt), desc(products.updatedAt)).limit(Math.min(opts.limit ?? 100, 200));
+}
+
 export async function getProductForAdmin(db: Db, actor: Actor, productId: string) {
   const [p] = await db.select().from(products).where(eq(products.id, productId));
   if (!p) throw new AppError("NOT_FOUND", "Product not found");
@@ -91,10 +114,18 @@ export async function listProductsForAdmin(db: Db, actor: Actor, opts: { limit?:
   return scope === "all" ? q : q.where(inArray(products.brandId, scope));
 }
 
+async function assertSizeGuideMedia(db: Db, mediaId: string | null, brandId: string) {
+  if (!mediaId) return;
+  const [asset] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, mediaId));
+  if (!asset || asset.kind !== "image" || (asset.brandId && asset.brandId !== brandId)) {
+    throw new AppError("VALIDATION", "Choose an image from this brand's media library for the size guide");
+  }
+}
+
 function rowFrom(id: string, i: ProductInput, slug: string): typeof products.$inferInsert {
   return {
     id, brandId: i.brandId, slug, name: i.name, subtitle: i.subtitle ?? null, description: i.description ?? null,
-    materials: i.materials ?? null, fit: i.fit ?? null, sizingInfo: i.sizingInfo ?? null, careInstructions: i.careInstructions ?? null,
+    materials: i.materials ?? null, fit: i.fit ?? null, sizingInfo: i.sizingInfo ?? null, sizeGuideMediaId: i.sizeGuideMediaId ?? null, customSizingEnabled: i.customSizingEnabled, preOrderEnabled: i.preOrderEnabled, fulfillmentTime: i.fulfillmentTime ?? null, careInstructions: i.careInstructions ?? null,
     deliveryInfo: i.deliveryInfo ?? null, productType: i.productType ?? null, style: i.style ?? null, occasion: i.occasion ?? null,
     currency: i.currency, basePrice: i.basePrice, compareAtPrice: i.compareAtPrice ?? null, status: i.status,
     publishAt: i.publishAt ?? null, isFeatured: i.isFeatured, seoTitle: i.seoTitle ?? null, seoDescription: i.seoDescription ?? null,

@@ -11,6 +11,7 @@ const DESKTOP_NAV = [
   { href: "/brands/alomziee-footies", label: "ALOMZIEE FOOTIES" },
   { href: "/outfit-builder", label: "Outfit Builder" },
   { href: "/shop", label: "Shop all" },
+  { href: "/collaborations", label: "Collaborations" },
 ] as const;
 
 const MOBILE_NAV = [
@@ -18,6 +19,7 @@ const MOBILE_NAV = [
   { href: "/brands/uthy-luxury", label: "UTHY LUXURY" },
   { href: "/brands/alomziee-footies", label: "ALOMZIEE FOOTIES" },
   { href: "/outfit-builder", label: "Outfit Builder" },
+  { href: "/collaborations", label: "Collaborations" },
   { href: "/#newsletter", label: "Join VÉRANE" },
 ] as const;
 
@@ -82,7 +84,7 @@ export function SiteHeader({ cartCount, signedIn }: { cartCount: number; signedI
       {open && (
         <div ref={panelRef} id="mobile-menu" role="dialog" aria-modal="true" aria-label="Menu" className="house-mobile-menu fixed inset-0 z-[var(--z-drawer)] flex flex-col overflow-y-auto px-6 pb-8 pt-4 backdrop-blur-xl sm:px-8">
           <div className="flex h-12 items-center justify-between"><span className="display text-2xl tracking-[0.2em]">VÉRANE</span><button ref={closeRef} type="button" className="glass min-h-11 rounded-full px-5 text-sm" onClick={() => setOpen(false)}>Close</button></div>
-          <nav aria-label="Mobile" className="house-mobile-menu__nav mt-8 flex flex-1 flex-col justify-center gap-4">{MOBILE_NAV.map((n, i) => <Link key={n.href} href={n.href} className={cn("display text-4xl leading-none sm:text-5xl", i === 4 && "house-mobile-menu__join")} onClick={() => setOpen(false)}>{n.label}<span aria-hidden="true" className="ml-3 text-base opacity-60">↗</span></Link>)}</nav>
+          <nav aria-label="Mobile" className="house-mobile-menu__nav mt-8 flex flex-1 flex-col justify-center gap-4">{MOBILE_NAV.map((n, i) => <Link key={n.href} href={n.href} className={cn("display text-4xl leading-none sm:text-5xl", i === 5 && "house-mobile-menu__join")} onClick={() => setOpen(false)}>{n.label}<span aria-hidden="true" className="ml-3 text-base opacity-60">↗</span></Link>)}</nav>
           <div className="mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-line pt-5 text-sm">
             <Link href="/search" className="text-muted hover:text-fg" onClick={() => setOpen(false)}>Search the house</Link>
             {signedIn ? <Link href="/account" className="text-muted hover:text-fg" onClick={() => setOpen(false)}>Your account</Link> : <Link href="/login" className="text-muted hover:text-fg" onClick={() => setOpen(false)}>Sign in</Link>}

@@ -41,6 +41,7 @@ export const cartItems = sqliteTable(
     cartId: text().notNull().references(() => carts.id, { onDelete: "cascade" }),
     variantId: text().notNull().references(() => productVariants.id, { onDelete: "cascade" }),
     quantity: integer().notNull(),
+    customMeasurements: text({ mode: "json" }).$type<Record<string, number>>(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("cart_items_uq").on(t.cartId, t.variantId)],
@@ -143,6 +144,9 @@ export const orderItems = sqliteTable(
     sku: text().notNull(),
     size: text(),
     colorName: text(),
+    customMeasurements: text({ mode: "json" }).$type<Record<string, number>>(),
+    isPreOrder: integer({ mode: "boolean" }).notNull().default(false),
+    fulfillmentTimeSnapshot: text(),
     unitPrice: money().notNull(),
     quantity: integer().notNull(),
     lineTotal: money().notNull(),
@@ -188,6 +192,7 @@ export const webhookEvents = sqliteTable(
 export const shippingRecords = sqliteTable("shipping_records", {
   id: id(),
   orderId: text().notNull().references(() => orders.id, { onDelete: "cascade" }),
+  brandId: text().references(() => brands.id, { onDelete: "set null" }),
   provider: text().notNull(),
   providerShipmentId: text(),
   trackingNumber: text(),
@@ -196,7 +201,7 @@ export const shippingRecords = sqliteTable("shipping_records", {
   status: text({ enum: ["pending", "label_created", "in_transit", "out_for_delivery", "delivered", "failed", "returned"] }).notNull().default("pending"),
   createdAt: createdAt(),
   updatedAt: updatedAt(),
-});
+}, (t) => [index("shipping_records_brand_idx").on(t.brandId, t.orderId)]);
 
 export const orderStatusHistory = sqliteTable(
   "order_status_history",

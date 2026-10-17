@@ -1,6 +1,6 @@
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
-import { emailOutbox, orderStatusHistory, orders, shippingRecords } from "@/infrastructure/db/schema";
+import { emailOutbox, orderBrandFulfilments, orderStatusHistory, orders, shippingRecords } from "@/infrastructure/db/schema";
 import type { ShippingProvider, ShippingOption, ShipAddress } from "@/infrastructure/shipping/types";
 import { AppError } from "@/lib/errors";
 import { assertCan, type Actor } from "@/domains/authorization";
@@ -15,31 +15,78 @@ export async function quoteShipping(provider: ShippingProvider, dest: ShipAddres
   return options;
 }
 
-/** Only an admin with orders.manage for EVERY brand in the order may create the shipment (single parcel per order). */
+/** Create a delivery parcel for one brand, checking only that brand's order permission. */
+export async function createShipmentForBrand(db: Db, provider: ShippingProvider, actor: Actor, orderId: string, brandId: string) {
+  const b = await loadOrderBundle(db, orderId);
+  if (!b) throw new AppError("NOT_FOUND", "Order not found");
+  assertCan(actor, "orders.manage", brandId);
+  if (b.order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Only paid orders can be shipped");
+  const fulfilment = b.fulfillments.find((row) => row.brandId === brandId && row.method === "delivery");
+  if (!fulfilment) throw new AppError("NOT_FOUND", "Delivery fulfilment for this brand was not found");
+  const stored = b.order.shippingOptionJson as unknown as ShippingOption & {
+    meta?: {
+      method?: string;
+      brandSelections?: Array<{ brandId: string; method: "delivery" | "pickup"; id: string; amountMinor: number }>;
+    };
+  };
+  const brandSelection = stored.meta?.method === "per_brand"
+    ? stored.meta.brandSelections?.find((selection) => selection.brandId === brandId)
+    : null;
+  if (brandSelection && brandSelection.method !== "delivery") throw new AppError("CONFLICT", "This brand's order is for customer pickup, not delivery");
+  if (!brandSelection && (stored.meta?.method === "pickup" || b.fulfillments.some((row) => row.method === "pickup"))) {
+    throw new AppError("CONFLICT", "This order is for customer pickup and cannot create a delivery shipment");
+  }
+  if (stored.meta?.method === "per_brand" && !brandSelection) throw new AppError("CONFLICT", "The saved delivery selection for this brand is missing");
+  if (b.shipments.some((shipment) => shipment.brandId === brandId && shipment.status !== "failed")) throw new AppError("CONFLICT", "This brand already has an active shipment");
+
+  const unscoped = b.shipments.filter((shipment) => !shipment.brandId && shipment.status !== "failed");
+  if (unscoped.length) {
+    if (b.fulfillments.filter((row) => row.method === "delivery").length !== 1) throw new AppError("CONFLICT", "A legacy order-level shipment exists; contact an administrator before creating brand parcels");
+    const shipment = unscoped[0]!;
+    await db.update(shippingRecords).set({ brandId, updatedAt: new Date() }).where(eq(shippingRecords.id, shipment.id));
+    await db.update(orderBrandFulfilments).set({ status: shipment.status === "delivered" ? "delivered" : shipment.status === "in_transit" || shipment.status === "out_for_delivery" ? "shipped" : "processing", carrier: shipment.carrier, trackingNumber: shipment.trackingNumber, trackingUrl: shipment.trackingUrl, updatedAt: new Date() }).where(eq(orderBrandFulfilments.id, fulfilment.id));
+    return;
+  }
+
+  const brandItems = b.items.filter((item) => item.brandId === brandId);
+  if (!brandItems.length) throw new AppError("NOT_FOUND", "No order items belong to this brand");
+  const addr = b.order.shippingAddressJson as unknown as ShipAddress;
+  const dest: ShipAddress = { ...addr, email: b.order.email, phone: b.order.phone ?? addr.phone };
+  const parcel = brandItems.map((item) => ({ name: item.productName, quantity: item.quantity, unitPriceMinor: item.unitPrice }));
+  const rates = await provider.getRates(dest, parcel);
+  const selectedOptionId = brandSelection?.id ?? stored.id;
+  const fresh = rates.find((option) => option.id === selectedOptionId);
+  if (!fresh) throw new AppError("CONFLICT", "The delivery service paid for is unavailable for this brand's parcel. Review the shipment manually before creating a label.");
+  if (brandSelection && fresh.amountMinor !== brandSelection.amountMinor) {
+    throw new AppError("CONFLICT", "The carrier's rate changed after checkout for this brand. Review the price difference before creating a label.");
+  }
+  const made = await provider.createShipment({ orderNumber: `${b.order.orderNumber}-${brandId.slice(0, 6)}`, dest, items: parcel, option: fresh });
+  await db.insert(shippingRecords).values({ orderId, brandId, provider: provider.name, providerShipmentId: made.providerShipmentId, trackingNumber: made.trackingNumber, trackingUrl: made.trackingUrl, carrier: made.carrier, status: "label_created" });
+  await db.update(orderBrandFulfilments).set({ status: "processing", carrier: made.carrier, trackingNumber: made.trackingNumber, trackingUrl: made.trackingUrl, updatedAt: new Date() }).where(eq(orderBrandFulfilments.id, fulfilment.id));
+  await setOrderStatus(db, orderId, "processing", "Brand shipment created", actor.userId);
+  await writeAudit(db, { actorUserId: actor.userId, action: "order.shipment.create", entityType: "order", entityId: orderId, brandId, after: made });
+}
+
+/** Create every missing brand parcel for an administrator with access to the full order. */
 export async function createShipmentForOrder(db: Db, provider: ShippingProvider, actor: Actor, orderId: string) {
   const b = await loadOrderBundle(db, orderId);
   if (!b) throw new AppError("NOT_FOUND", "Order not found");
-  for (const brandId of new Set(b.items.map((i) => i.brandId))) assertCan(actor, "orders.manage", brandId);
-  if (b.order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Only paid orders can be shipped");
-  if (b.shipments.some((s) => s.status !== "failed")) throw new AppError("CONFLICT", "A shipment already exists for this order");
-  const addr = b.order.shippingAddressJson as unknown as ShipAddress;
-  const stored = b.order.shippingOptionJson as unknown as ShippingOption;
-  const dest: ShipAddress = { ...addr, email: b.order.email, phone: b.order.phone ?? addr.phone };
-  const parcel = b.items.map((i) => ({ name: i.productName, quantity: i.quantity, unitPriceMinor: i.unitPrice }));
-  // Provider quotes expire: re-quote and re-select the same service the customer paid for.
-  const fresh = (await provider.getRates(dest, parcel)).find((o) => o.id === stored.id) ?? stored;
-  const made = await provider.createShipment({ orderNumber: b.order.orderNumber, dest, items: parcel, option: fresh });
-  await db.insert(shippingRecords).values({ orderId, provider: provider.name, providerShipmentId: made.providerShipmentId, trackingNumber: made.trackingNumber, trackingUrl: made.trackingUrl, carrier: made.carrier, status: "label_created" });
-  await setOrderStatus(db, orderId, "processing", "Shipment created", actor.userId);
-  await writeAudit(db, { actorUserId: actor.userId, action: "order.shipment.create", entityType: "order", entityId: orderId, after: made });
+  for (const brandId of new Set(b.items.map((item) => item.brandId))) assertCan(actor, "orders.manage", brandId);
+  const delivery = b.fulfillments.filter((row) => row.method === "delivery");
+  let attempted = 0;
+  for (const fulfilment of delivery) {
+    if (b.shipments.some((shipment) => shipment.brandId === fulfilment.brandId && shipment.status !== "failed")) continue;
+    await createShipmentForBrand(db, provider, actor, orderId, fulfilment.brandId);
+    attempted++;
+  }
+  if (!attempted) throw new AppError("CONFLICT", "Every brand already has an active shipment");
 }
-
 const ORDER_FLOW: Record<string, string[]> = { paid: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"], delivered: ["refunded"] };
-export async function setOrderStatus(db: Db, orderId: string, to: string, note: string, actorUserId: string | null) {
+export async function setOrderStatus(db: Db, orderId: string, to: string, note: string, actorUserId: string | null, options: { allowFulfilmentCompletion?: boolean } = {}) {
   const [o] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!o) throw new AppError("NOT_FOUND", "Order not found");
   if (o.status === to) return;
-  if (!(ORDER_FLOW[o.status] ?? []).includes(to) && !(o.status === "paid" && to === "processing")) throw new AppError("CONFLICT", `Cannot move an order from ${o.status} to ${to}`);
+  if (!(ORDER_FLOW[o.status] ?? []).includes(to) && !(o.status === "paid" && to === "processing") && !(options.allowFulfilmentCompletion && o.status === "processing" && to === "delivered")) throw new AppError("CONFLICT", `Cannot move an order from ${o.status} to ${to}`);
   const r = await db.update(orders).set({ status: to as never }).where(and(eq(orders.id, orderId), eq(orders.status, o.status)));
   if (((r as unknown as { rowsAffected?: number }).rowsAffected ?? 0) === 0) return; // lost a race; other writer already moved it
   await db.insert(orderStatusHistory).values({ orderId, fromStatus: o.status, toStatus: to, note, actorUserId });
@@ -64,8 +111,19 @@ export async function pollShipments(db: Db, provider: ShippingProvider): Promise
       if (t.status === s.status) continue;
       await db.update(shippingRecords).set({ status: t.status, trackingUrl: t.trackingUrl ?? s.trackingUrl }).where(eq(shippingRecords.id, s.id));
       await db.insert(emailOutbox).values({ dedupeKey: `ship:${s.id}:${t.status}`, template: "shipping_update", toEmail: (await db.select().from(orders).where(eq(orders.id, s.orderId)))[0]?.email ?? "", payloadJson: { orderId: s.orderId, shipmentStatus: t.status.replace(/_/g, " "), trackingUrl: t.trackingUrl ?? s.trackingUrl } }).onConflictDoNothing();
-      if (t.status === "in_transit") await setOrderStatus(db, s.orderId, "shipped", "In transit", null).catch(() => undefined);
-      if (t.status === "delivered") { await setOrderStatus(db, s.orderId, "shipped", "In transit", null).catch(() => undefined); await setOrderStatus(db, s.orderId, "delivered", "Delivered", null).catch(() => undefined); }
+      const targetFulfilment = s.brandId
+        ? and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.brandId, s.brandId), eq(orderBrandFulfilments.method, "delivery"))
+        : and(eq(orderBrandFulfilments.orderId, s.orderId), eq(orderBrandFulfilments.method, "delivery"));
+      if (t.status === "in_transit") {
+        await db.update(orderBrandFulfilments).set({ status: "shipped", updatedAt: new Date() }).where(targetFulfilment);
+        const all = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, s.orderId));
+        if (all.length && all.every((row) => row.status === "shipped" || row.status === "delivered")) await setOrderStatus(db, s.orderId, "shipped", "All brand shipments in transit", null).catch(() => undefined);
+      }
+      if (t.status === "delivered") {
+        await db.update(orderBrandFulfilments).set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() }).where(targetFulfilment);
+        const all = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, s.orderId));
+        if (all.length && all.every((row) => row.status === "delivered")) await setOrderStatus(db, s.orderId, "delivered", "All brand fulfilments delivered", null, { allowFulfilmentCompletion: true }).catch(() => undefined);
+      }
       changed++;
     } catch { /* provider hiccup: retry on next tick */ }
   }

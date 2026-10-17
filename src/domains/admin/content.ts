@@ -1,7 +1,7 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/infrastructure/db/client";
-import { campaigns, journalArticles, lookItems, looks, pageBlocks, pages, products } from "@/infrastructure/db/schema";
+import { brands, campaigns, journalArticles, lookItems, looks, pageBlocks, pages, products } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { slugify } from "@/lib/slug";
 import { assertCan, type Actor } from "@/domains/authorization";
@@ -89,6 +89,23 @@ export async function getOrCreateHome(db: Db, actor: Actor) {
   if (p) return p;
   return (await db.insert(pages).values({ kind: "home", slug: "", title: "VÉRANE", status: "draft" }).returning())[0]!;
 }
+export async function getOrCreateBrandLanding(db: Db, actor: Actor, brandId: string) {
+  assertCan(actor, "content.write", brandId);
+  const [brand] = await db.select().from(brands).where(eq(brands.id, brandId));
+  if (!brand) throw new AppError("NOT_FOUND", "Brand not found");
+  const [page] = await db.select().from(pages).where(and(eq(pages.kind, "brand_landing"), eq(pages.brandId, brand.id), eq(pages.slug, brand.slug)));
+  if (page) return page;
+  try {
+    return (await db.insert(pages).values({ kind: "brand_landing", brandId: brand.id, slug: brand.slug, title: `${brand.name} storefront`, status: "draft" }).returning())[0]!;
+  } catch (error) {
+    if (String(error).includes("UNIQUE")) {
+      const [existing] = await db.select().from(pages).where(and(eq(pages.kind, "brand_landing"), eq(pages.brandId, brand.id), eq(pages.slug, brand.slug)));
+      if (existing) return existing;
+    }
+    throw error;
+  }
+}
+
 /** Replaces the page's blocks atomically after validating every block against its schema; unknown types are rejected. */
 export async function savePageBlocks(db: Db, actor: Actor, pageId: string, input: { status: "draft" | "published"; blocks: Array<{ type: string; data: unknown; isVisible?: boolean }> }) {
   const [p] = await db.select().from(pages).where(eq(pages.id, pageId)); if (!p) throw new AppError("NOT_FOUND", "Page not found");

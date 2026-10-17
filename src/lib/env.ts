@@ -3,6 +3,7 @@ import { AppError } from "./errors";
 
 const schema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
+  MARKETING_AI_URL: z.preprocess((value) => value === "" ? undefined : value, z.string().url().refine((value) => { const url = new URL(value); return url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname)); }, "Use HTTPS except for localhost development").optional()),
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1).default("file:./local.db"),
   DATABASE_AUTH_TOKEN: z.string().optional(),

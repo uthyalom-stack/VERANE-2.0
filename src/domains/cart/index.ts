@@ -21,37 +21,45 @@ export async function mergeGuestCart(db: Db, guestTokenHash: string, userId: str
   if (!guest) return;
   const mine = await getOrCreateCart(db, { userId });
   const items = await db.select().from(cartItems).where(eq(cartItems.cartId, guest.id));
-  for (const i of items) await upsertQty(db, mine.id, i.variantId, i.quantity, "add");
+  for (const i of items) await upsertQty(db, mine.id, i.variantId, i.quantity, "add", i.customMeasurements);
   await db.update(carts).set({ status: "converted" }).where(eq(carts.id, guest.id));
 }
 
-async function upsertQty(db: Db, cartId: string, variantId: string, qty: number, mode: "add" | "set") {
+async function upsertQty(db: Db, cartId: string, variantId: string, qty: number, mode: "add" | "set", customMeasurements?: Record<string, number> | null) {
   const [row] = await db.select().from(cartItems).where(and(eq(cartItems.cartId, cartId), eq(cartItems.variantId, variantId)));
   const next = Math.min(99, mode === "add" ? (row?.quantity ?? 0) + qty : qty);
   if (next < 1) { if (row) await db.delete(cartItems).where(eq(cartItems.id, row.id)); return; }
-  if (row) await db.update(cartItems).set({ quantity: next }).where(eq(cartItems.id, row.id));
-  else await db.insert(cartItems).values({ cartId, variantId, quantity: next });
+  if (row) await db.update(cartItems).set({ quantity: next, ...(customMeasurements !== undefined ? { customMeasurements } : {}) }).where(eq(cartItems.id, row.id));
+  else await db.insert(cartItems).values({ cartId, variantId, quantity: next, customMeasurements: customMeasurements ?? null });
 }
 
 /** Only publicly purchasable, active variants may enter a cart. The client never supplies price. */
-export async function addToCart(db: Db, cartId: string, variantId: string, quantity: number) {
+export async function addToCart(db: Db, cartId: string, variantId: string, quantity: number, customMeasurements?: Record<string, number>) {
   if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) throw new AppError("VALIDATION", "Invalid quantity");
-  const [row] = await db.select({ v: productVariants, l: inventoryLevels }).from(productVariants)
+  const [row] = await db.select({ v: productVariants, p: products, l: inventoryLevels }).from(productVariants)
     .innerJoin(products, eq(products.id, productVariants.productId)).leftJoin(inventoryLevels, eq(inventoryLevels.variantId, productVariants.id))
     .where(and(eq(productVariants.id, variantId), eq(productVariants.isActive, true), publiclyVisible()));
   if (!row) throw new AppError("NOT_FOUND", "This item is not available");
   const available = row.l ? row.l.onHand - row.l.reserved : 0;
+  const preorder = row.p.preOrderEnabled && available <= 0 && !row.l?.allowBackorder;
+  if (row.p.customSizingEnabled && !customMeasurements) throw new AppError("VALIDATION", "Enter your custom measurements before adding this piece");
+  if (!row.p.customSizingEnabled && customMeasurements) throw new AppError("VALIDATION", "Custom measurements are not enabled for this piece");
   const [existing] = await db.select().from(cartItems).where(and(eq(cartItems.cartId, cartId), eq(cartItems.variantId, variantId)));
+  if (row.p.customSizingEnabled && existing && JSON.stringify(existing.customMeasurements ?? null) !== JSON.stringify(customMeasurements ?? null)) throw new AppError("CONFLICT", "This piece is already in your bag with different measurements. Remove it before adding a different set.");
   const wanted = (existing?.quantity ?? 0) + quantity;
-  if (!row.l?.allowBackorder && wanted > available) throw new AppError("OUT_OF_STOCK", available > 0 ? `Only ${available} left in this size` : "This item is sold out");
-  await upsertQty(db, cartId, variantId, quantity, "add");
+  if (!row.l?.allowBackorder && !preorder && wanted > available) throw new AppError("OUT_OF_STOCK", available > 0 ? `Only ${available} left in this size` : "This item is sold out");
+  await upsertQty(db, cartId, variantId, quantity, "add", customMeasurements);
 }
 
 export async function setCartQuantity(db: Db, cartId: string, variantId: string, quantity: number) {
   if (!Number.isInteger(quantity) || quantity < 0 || quantity > 99) throw new AppError("VALIDATION", "Invalid quantity");
   if (quantity > 0) {
-    const [l] = await db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variantId));
-    if (!l || (!l.allowBackorder && quantity > l.onHand - l.reserved)) throw new AppError("OUT_OF_STOCK", "Not enough stock for that quantity");
+    const [row] = await db.select({ l: inventoryLevels, p: products }).from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId)).leftJoin(inventoryLevels, eq(inventoryLevels.variantId, productVariants.id))
+      .where(eq(productVariants.id, variantId));
+    const available = row?.l ? row.l.onHand - row.l.reserved : 0;
+    const preorder = !!row?.p.preOrderEnabled && available <= 0 && !row?.l?.allowBackorder;
+    if (!row || (!row.l?.allowBackorder && !preorder && quantity > available)) throw new AppError("OUT_OF_STOCK", "Not enough stock for that quantity");
   }
   await upsertQty(db, cartId, variantId, quantity, "set");
 }
@@ -66,7 +74,7 @@ export async function applyDiscountCode(db: Db, cartId: string, code: string | n
 
 export type CartLineView = {
   variantId: string; productId: string; brandId: string; brandName: string; name: string; sku: string; imageKey: string | null; size: string | null; colorName: string | null;
-  unitPrice: number; quantity: number; lineTotal: number; available: number; purchasable: boolean; issue: string | null;
+  unitPrice: number; quantity: number; lineTotal: number; available: number; purchasable: boolean; issue: string | null; isPreOrder: boolean; fulfillmentTime: string | null; customMeasurements: Record<string, number> | null;
 };
 export type CartView = { cartId: string; currency: string; lines: CartLineView[]; pricing: PricingResult; discountError: string | null; canCheckout: boolean };
 
@@ -86,8 +94,9 @@ export async function getCartView(db: Db, cartId: string, opts: { shippingTotal?
     const visible = r.p.status === "published" || (r.p.status === "scheduled" && !!r.p.publishAt && r.p.publishAt <= now);
     const available = r.l ? r.l.onHand - r.l.reserved : 0;
     const unitPrice = effectiveUnitPrice(r.p.basePrice, r.v.priceOverride);
-    const issue = !visible || !r.v.isActive ? "No longer available" : !r.l?.allowBackorder && available < i.quantity ? (available > 0 ? `Only ${available} left` : "Sold out") : null;
-    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, imageKey: null, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue }];
+    const isPreOrder = r.p.preOrderEnabled && available <= 0 && !r.l?.allowBackorder;
+    const issue = !visible || !r.v.isActive ? "No longer available" : r.p.customSizingEnabled && !i.customMeasurements ? "Custom measurements are required; remove and re-add this item" : !r.l?.allowBackorder && !isPreOrder && available < i.quantity ? (available > 0 ? `Only ${available} left` : "Sold out") : null;
+    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, imageKey: null, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue, isPreOrder, fulfillmentTime: r.p.fulfillmentTime, customMeasurements: i.customMeasurements }];
   });
   const mediaRows = lines.length ? await db.select({ productId: productMedia.productId, key: mediaAssets.storageKey })
     .from(productMedia).innerJoin(mediaAssets, eq(mediaAssets.id, productMedia.mediaId))

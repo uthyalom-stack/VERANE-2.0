@@ -1,12 +1,17 @@
-name: Repair branch verification
+name: VÉRANE verification
 
 on:
   pull_request:
     branches:
       - integration/stage-4-combined
+      - feat/v1-parity-commerce
+  push:
+    branches:
+      - integration/stage-4-combined
+      - feat/v1-parity-commerce
 
 concurrency:
-  group: verane-repair-pr-${{ github.event.pull_request.number }}
+  group: verane-verify-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -30,22 +35,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Generate a forward migration from the preserved migration history
-        run: npm run db:generate
-
-      - name: Confirm the forward migration history exists
-        run: node -e 'const j = JSON.parse(require("node:fs").readFileSync("drizzle/meta/_journal.json", "utf8")); if (j.entries.length < 3) { console.error("Drizzle did not append a forward migration"); process.exit(1); }'
-
-      - name: Verify the schema migration is committed
+      - name: Verify migration journal matches committed SQL files
         run: |
-          if [ -n "$(git status --porcelain -- drizzle)" ]; then
-            echo "::error::Drizzle generated an uncommitted migration. Review and commit it explicitly."
-            git status --short -- drizzle
-            exit 1
-          fi
-          echo "Committed migration history matches the schema."
+          node <<'NODE'
+          const fs = require("node:fs");
+          const journal = JSON.parse(fs.readFileSync("drizzle/meta/_journal.json", "utf8"));
+          const expected = new Set(journal.entries.map((entry) => `${entry.tag}.sql`));
+          const actual = fs.readdirSync("drizzle").filter((file) => /^\d{4}_.+\.sql$/.test(file));
+          const missing = [...expected].filter((file) => !actual.includes(file));
+          const unregistered = actual.filter((file) => !expected.has(file));
+          if (missing.length || unregistered.length) {
+            console.error({ missing, unregistered });
+            process.exit(1);
+          }
+          console.log(`Verified ${actual.length} committed SQL migrations.`);
+          NODE
 
-      - name: Prepare disposable SQLite database for build
+      - name: Diagnose committed migrations statement by statement
+        run: npx tsx scripts/diagnose-migrations.ts
+
+      - name: Apply migrations and seed disposable SQLite database
         env:
           SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
           TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
@@ -53,29 +62,13 @@ jobs:
           DATABASE_URL: file:./ci.db
         run: npm run db:migrate && npm run db:seed
 
-      - name: Run project checks
-        id: project-check
-        continue-on-error: true
+      - name: Typecheck, lint, integration tests and production build
         env:
           SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
           TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
+          SEED_ADMIN_PASSWORD: ci-only-seed-password-not-for-production-1234567890
           DATABASE_URL: file:./ci.db
         run: npm run check
 
       - name: Run offline tests
-        id: offline-tests
-        if: always()
-        continue-on-error: true
         run: npm run test:offline
-
-      - name: Summarize verification
-        if: always()
-        run: |
-          {
-            echo "## Repair branch verification"
-            echo "- npm run check: ${{ steps.project-check.outcome }}"
-            echo "- npm run test:offline: ${{ steps.offline-tests.outcome }}"
-          } >> "$GITHUB_STEP_SUMMARY"
-          if [ "${{ steps.project-check.outcome }}" != "success" ] || [ "${{ steps.offline-tests.outcome }}" != "success" ]; then
-            exit 1
-          fi

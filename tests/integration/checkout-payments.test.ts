@@ -7,7 +7,7 @@ import { expireStaleOrders, finalizePayment, handlePaymentWebhook, startCheckout
 import { createMockPaymentProvider } from "@/infrastructure/payments/mock";
 import { getAvailability } from "@/domains/inventory";
 import { hmacHex, sha256Hex } from "@/lib/crypto";
-import { emailOutbox, inventoryLevels, orders, paymentAttempts, productVariants, webhookEvents } from "@/infrastructure/db/schema";
+import { emailOutbox, inventoryLevels, orderBrandFulfilments, orderItems, orders, paymentAttempts, pickupLocations, productVariants, webhookEvents } from "@/infrastructure/db/schema";
 
 let ctx: Awaited<ReturnType<typeof makeTestDb>>; let a: Awaited<ReturnType<typeof seedBrandsAndActors>>; let variantId = "";
 const provider = createMockPaymentProvider({ secret: "whsec" });
@@ -85,5 +85,148 @@ describe("checkout + payment finalisation", () => {
     const id = await cartWith(1);
     await ctx.db.update(inventoryLevels).set({ onHand: 0, reserved: 0 }).where(eq(inventoryLevels.variantId, variantId)); // simulate sell-out elsewhere
     await expect(checkout(id)).rejects.toMatchObject({ code: "OUT_OF_STOCK" });
+  });
+});
+
+describe("pre-orders and custom sizing", () => {
+  it("allows a configured pre-order without reserving unavailable stock and snapshots its lead time", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, {
+      brandId: a.uthy.id,
+      name: "Pre-order Coat",
+      basePrice: 1_400_000,
+      status: "published",
+      preOrderEnabled: true,
+      fulfillmentTime: "Ships in 3–4 weeks",
+      variants: [{ sku: "PREORDER-COAT-M", size: "M", initialStock: 0 }],
+    });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    const view = await getCartView(ctx.db, cart.id);
+    expect(view.canCheckout).toBe(true);
+    expect(view.lines[0]).toMatchObject({ isPreOrder: true, fulfillmentTime: "Ships in 3–4 weeks" });
+
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "preorder@example.com", phone: "08012345678", address, shipping,
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const [line] = await ctx.db.select().from(orderItems).where(eq(orderItems.orderId, order.orderId));
+    const [level] = await ctx.db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variant!.id));
+    expect(line).toMatchObject({ isPreOrder: true, fulfillmentTimeSnapshot: "Ships in 3–4 weeks" });
+    expect(level).toMatchObject({ onHand: 0, reserved: 0 });
+
+    expect(await finalizePayment(ctx.db, provider, order.reference)).toBe("paid");
+    const [afterPayment] = await ctx.db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variant!.id));
+    expect(afterPayment).toMatchObject({ onHand: 0, reserved: 0 });
+  });
+
+  it("requires custom measurements for made-to-measure products and stores valid measurements on the cart line", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, {
+      brandId: a.uthy.id,
+      name: "Made-to-measure Shirt",
+      basePrice: 750_000,
+      status: "published",
+      customSizingEnabled: true,
+      variants: [{ sku: "CUSTOM-SHIRT-M", size: "M", initialStock: 2 }],
+    });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await expect(addToCart(ctx.db, cart.id, variant!.id, 1)).rejects.toMatchObject({ code: "VALIDATION" });
+    const measurements = { chest: 96, waist: 82, hips: 98, length: 70 };
+    await addToCart(ctx.db, cart.id, variant!.id, 1, measurements);
+    const view = await getCartView(ctx.db, cart.id);
+    expect(view.canCheckout).toBe(true);
+    expect(view.lines[0]!.customMeasurements).toEqual(measurements);
+  });
+});
+
+describe("pickup checkout", () => {
+  it("creates a zero-fee pickup order with a server-validated location snapshot", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Loafer", basePrice: 850000, status: "published", variants: [{ sku: "PICK-1", size: "42", initialStock: 2 }] });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.uthy.id, name: "Studio pickup", addressLine1: "14 Marina Road", city: "Lagos", state: "Lagos", country: "NG", instructions: "Ask for the VÉRANE desk", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "pickup@example.com", phone: "08012345678", address,
+      shipping: { id: `pickup:${location!.id}`, name: "Pickup — Studio pickup", amountMinor: 0, meta: { method: "pickup", pickupLocationId: location!.id } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const [fulfilment] = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilment).toMatchObject({ method: "pickup", status: "unfulfilled", pickupLocationId: location!.id });
+    expect(JSON.parse(fulfilment!.pickupLocationSnapshot!)).toMatchObject({ name: "Studio pickup", city: "Lagos" });
+    const [savedOrder] = await ctx.db.select().from(orders).where(eq(orders.id, order.orderId));
+    expect(savedOrder!.shippingTotal).toBe(0);
+  });
+
+  it("creates independent delivery fulfilment records for a multi-brand order", async () => {
+    const { id: uthyProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Brand A Jacket", basePrice: 1250000, status: "published", variants: [{ sku: "BRANDA-1", size: "M", initialStock: 2 }] });
+    const { id: aloProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.alo.id, name: "Brand B Footie", basePrice: 950000, status: "published", variants: [{ sku: "BRANDB-1", size: "42", initialStock: 2 }] });
+    const [variantA] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, uthyProductId));
+    const [variantB] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, aloProductId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variantA!.id, 1);
+    await addToCart(ctx.db, cart.id, variantB!.id, 1);
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "multi-brand@example.com", phone: "08012345678", address,
+      shipping: { id: "courier-standard", name: "Courier — Standard", amountMinor: 2500, meta: { method: "delivery" } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const fulfilments = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilments).toHaveLength(2);
+    expect(fulfilments.map((row) => row.brandId).sort()).toEqual([a.alo.id, a.uthy.id].sort());
+    expect(fulfilments.every((row) => row.method === "delivery" && row.status === "unfulfilled")).toBe(true);
+  });
+
+  it("supports mixed per-brand delivery and pickup with separately priced fulfilments", async () => {
+    const { id: uthyProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Mixed Pickup Jacket", basePrice: 1_250_000, status: "published", variants: [{ sku: "MIXED-PICKUP-A", size: "M", initialStock: 2 }] });
+    const { id: aloProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.alo.id, name: "Mixed Delivery Footie", basePrice: 950_000, status: "published", variants: [{ sku: "MIXED-DELIVERY-B", size: "42", initialStock: 2 }] });
+    const [variantA] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, uthyProductId));
+    const [variantB] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, aloProductId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.uthy.id, name: "Uthy Studio", addressLine1: "14 Marina Road", city: "Lagos", state: "Lagos", country: "NG", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variantA!.id, 1);
+    await addToCart(ctx.db, cart.id, variantB!.id, 1);
+
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "mixed-fulfilment@example.com", phone: "08012345678", address,
+      shipping: {
+        id: "per-brand", name: "Brand-specific fulfilment", amountMinor: 250000,
+        meta: {
+          method: "per_brand",
+          brandSelections: [
+            { brandId: a.uthy.id, method: "pickup", id: `pickup:${location!.id}`, name: "Pickup — Uthy Studio", amountMinor: 0, pickupLocationId: location!.id },
+            { brandId: a.alo.id, method: "delivery", id: "mock-standard", name: "MockCarrier — Standard", amountMinor: 250000 },
+          ],
+        },
+      },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+
+    const fulfilments = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilments).toHaveLength(2);
+    expect(fulfilments.find((row) => row.brandId === a.uthy.id)).toMatchObject({ method: "pickup", pickupLocationId: location!.id });
+    expect(fulfilments.find((row) => row.brandId === a.alo.id)).toMatchObject({ method: "delivery", pickupLocationId: null });
+    const [savedOrder] = await ctx.db.select().from(orders).where(eq(orders.id, order.orderId));
+    expect(savedOrder!.shippingTotal).toBe(250000);
+  });
+
+  it("rejects a pickup location that belongs to a different brand", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Sandal", basePrice: 650000, status: "published", variants: [{ sku: "PICK-2", size: "40", initialStock: 2 }] });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.alo.id, name: "Other brand pickup", addressLine1: "1 Other Road", city: "Lagos", state: "Lagos", country: "NG", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    await expect(startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "pickup@example.com", phone: "08012345678", address,
+      shipping: { id: `pickup:${location!.id}`, name: "Pickup — Other brand pickup", amountMinor: 0, meta: { method: "pickup", pickupLocationId: location!.id } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    })).rejects.toMatchObject({ code: "VALIDATION" });
   });
 });

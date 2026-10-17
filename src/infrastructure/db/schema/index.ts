@@ -4,3 +4,4 @@ export * from "./catalog";
 export * from "./editorial";
 export * from "./commerce";
 export * from "./operations";
+export * from "./parity";
