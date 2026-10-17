@@ -45,6 +45,7 @@ export async function addToCart(db: Db, cartId: string, variantId: string, quant
   if (row.p.customSizingEnabled && !customMeasurements) throw new AppError("VALIDATION", "Enter your custom measurements before adding this piece");
   if (!row.p.customSizingEnabled && customMeasurements) throw new AppError("VALIDATION", "Custom measurements are not enabled for this piece");
   const [existing] = await db.select().from(cartItems).where(and(eq(cartItems.cartId, cartId), eq(cartItems.variantId, variantId)));
+  if (row.p.customSizingEnabled && existing && JSON.stringify(existing.customMeasurements ?? null) !== JSON.stringify(customMeasurements ?? null)) throw new AppError("CONFLICT", "This piece is already in your bag with different measurements. Remove it before adding a different set.");
   const wanted = (existing?.quantity ?? 0) + quantity;
   if (!row.l?.allowBackorder && !preorder && wanted > available) throw new AppError("OUT_OF_STOCK", available > 0 ? `Only ${available} left in this size` : "This item is sold out");
   await upsertQty(db, cartId, variantId, quantity, "add", customMeasurements);
