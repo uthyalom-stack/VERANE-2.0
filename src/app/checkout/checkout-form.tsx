@@ -30,12 +30,12 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
   const pay = () => start(async () => { setErr(null); const r = await placeOrderAction({ ...f, shippingOptionId: sel ?? "" }); if (r && !r.ok) setErr(r.message ?? "Payment could not be started"); });
 
   return (
-    <div className="mt-10 grid gap-12 md:grid-cols-[1.4fr_1fr]">
+    <div className="house-checkout-layout mt-10 grid gap-10 md:grid-cols-[1.35fr_1fr] md:gap-14">
       <div className="grid gap-10">
-        <section aria-labelledby="s-contact"><h2 id="s-contact" className="display text-3xl">Contact</h2>
+        <section aria-labelledby="s-contact" className="house-checkout-section"><p className="house-kicker mb-3">01 / Your details</p><h2 id="s-contact" className="display text-3xl">Contact</h2>
           <div className="mt-4 grid gap-4 md:grid-cols-2">{input("email", "Email", { type: "email", ac: "email" })}{input("phone", "Phone", { type: "tel", ac: "tel" })}</div>
           {!signedIn && <p className="mt-3 text-sm text-muted"><a className="underline" href="/login?next=/checkout">Sign in</a> to use saved addresses. Guest checkout is fine too.</p>}</section>
-        <section aria-labelledby="s-addr"><h2 id="s-addr" className="display text-3xl">Delivery address</h2>
+        <section aria-labelledby="s-addr" className="house-checkout-section"><p className="house-kicker mb-3">02 / Where it goes</p><h2 id="s-addr" className="display text-3xl">Delivery address</h2>
           {savedAddresses.length > 0 && <div className="mt-4"><label htmlFor="saved" className="text-sm">Saved addresses</label>
             <select id="saved" className="mt-1.5 min-h-12 w-full rounded-[var(--r-sm)] border border-line bg-surface px-3" defaultValue="" onChange={(e) => { const a = savedAddresses.find((x) => x.id === e.target.value); if (a) { setF({ ...f, ...a }); setOptions(null); setSel(null); } }}>
               <option value="">Choose a saved address</option>{savedAddresses.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}</select></div>}
@@ -43,13 +43,13 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
             <div className="grid gap-1.5"><label htmlFor="state" className="text-sm">State</label><select id="state" value={f.state} onChange={set("state")} required className="min-h-12 rounded-[var(--r-sm)] border border-line bg-surface px-3"><option value="">Select state</option>{NG_STATES.map((s) => <option key={s}>{s}</option>)}</select></div>
             {input("postalCode", "Postal code (optional)", { ac: "postal-code", req: false })}</div>
           <p className="mt-3 text-sm text-muted">We currently deliver within Nigeria.</p></section>
-        <section aria-labelledby="s-del"><h2 id="s-del" className="display text-3xl">Delivery</h2>
+        <section aria-labelledby="s-del" className="house-checkout-section"><p className="house-kicker mb-3">03 / Choose your service</p><h2 id="s-del" className="display text-3xl">Delivery</h2>
           {!options ? <Button className="mt-4" variant="outline" onClick={quote} disabled={!complete || pending}>{pending ? "Finding options…" : "Show delivery options"}</Button> : (
             <fieldset className="mt-4 grid gap-3"><legend className="sr-only">Delivery options</legend>
               {options.map((o) => <label key={o.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-[var(--r-md)] border border-line p-4 has-[:checked]:border-accent">
                 <span className="flex items-center gap-3"><input type="radio" name="ship" checked={sel === o.id} onChange={() => setSel(o.id)} /><span>{o.carrier} — {o.name}{o.eta && <span className="block text-xs text-muted">{o.eta}</span>}</span></span><span>{formatMoney(o.amountMinor, view.currency)}</span></label>)}</fieldset>)}</section>
       </div>
-      <aside className="glass h-fit rounded-[var(--r-lg)] p-6 md:sticky md:top-24"><h2 className="display text-3xl">Review</h2>
+      <aside className="house-checkout-summary glass h-fit rounded-[var(--r-lg)] p-6 md:sticky md:top-24"><p className="house-kicker mb-3">04 / Final review</p><h2 className="display text-3xl">Your order</h2>
         <ul className="mt-4 divide-y divide-line text-sm">{view.lines.map((l) => <li key={l.variantId} className="flex justify-between gap-3 py-3"><span>{l.name}<span className="block text-xs text-muted">{[l.colorName, l.size && `Size ${l.size}`].filter(Boolean).join(" · ")} × {l.quantity}</span></span><span>{formatMoney(l.lineTotal, view.currency)}</span></li>)}</ul>
         <div className="mt-4">{chosen ? <Totals view={{ ...view, pricing: { ...view.pricing, shippingTotal: chosen.amountMinor, total: chosen.total } }} /> : <Totals view={view} />}</div>
         <p role="alert" className="mt-4 min-h-5 text-sm text-red-400">{err}</p>
