@@ -28,16 +28,26 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     return queryString ? `/shop?${queryString}` : "/shop";
   };
   const pretty = (v: string) => {
-    const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock" };
+    const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock", true: "Yes" };
     return labels[v] ?? v.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
-  const activeFilterKeys = ["brand", "type", "style", "occasion", "size", "color", "availability", "sale", "featured"].filter((key) => Boolean(sp[key]));
-  const activeFilterLabels: Record<string, string> = { brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "Sale", featured: "Featured" };
+  const activeFilterKeys = ["brand", "type", "style", "occasion", "size", "color", "availability", "sale", "featured"].filter((key) => Boolean(sp[key]) && sp[key] !== "false");
+  const activeFilterLabels: Record<string, string> = { brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "On sale", featured: "Featured only" };
   const activeFilterLabel = (key: string) => activeFilterLabels[key] ?? key;
   const group = (label: string, key: string, values: string[]) => values.length === 0 ? null : (
-    <fieldset className="house-filter-group mb-7 border-b border-line pb-6"><legend className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</legend>
+    <div role="group" aria-label={label} className="house-filter-group mb-7 border-b border-line pb-6"><p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</p>
       <div className="flex flex-wrap gap-2">{values.map((v) => (
-        <Link key={v} href={href({ [key]: sp[key] === v ? undefined : v })} aria-pressed={sp[key] === v} className="house-filter-chip min-h-9 rounded-full border border-line px-3.5 py-2 text-xs transition-colors aria-pressed:border-accent aria-pressed:bg-accent aria-pressed:text-accent-fg">{pretty(v)}</Link>))}</div></fieldset>);
+        <Link key={v} href={href({ [key]: sp[key] === v ? undefined : v })} aria-current={sp[key] === v ? "true" : undefined} className="house-filter-chip min-h-9 rounded-full border border-line px-3.5 py-2 text-xs transition-colors aria-[current=true]:border-accent aria-[current=true]:bg-accent aria-[current=true]:text-accent-fg">{pretty(v)}</Link>))}</div></div>);
+  const toggleFilter = (label: string, key: "sale" | "featured") => (
+    <div role="group" aria-label={label} className="house-filter-group mb-7 border-b border-line pb-6">
+      <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        <Link href={href({ [key]: sp[key] === "true" ? undefined : "true" })} aria-current={sp[key] === "true" ? "true" : undefined} className="house-filter-chip min-h-9 rounded-full border border-line px-3.5 py-2 text-xs transition-colors aria-[current=true]:border-accent aria-[current=true]:bg-accent aria-[current=true]:text-accent-fg">
+          {key === "sale" ? "On sale" : "Featured only"}
+        </Link>
+      </div>
+    </div>
+  );
   return (
     <div className="mx-auto max-w-[1600px] px-5 pb-16 pt-28 md:px-10">
       <div className="house-shop-intro relative overflow-hidden rounded-[var(--r-lg)] border border-line px-6 py-10 md:px-10 md:py-14">
@@ -62,6 +72,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
               {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
               {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
               {group("Availability", "availability", ["in_stock"])}
+              {toggleFilter("Offers", "sale")}
+              {toggleFilter("Discovery", "featured")}
             </div>
           </details>
           <div className="hidden md:block">
@@ -70,6 +82,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
             {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
             {group("Availability", "availability", ["in_stock"])}
+            {toggleFilter("Offers", "sale")}
+            {toggleFilter("Discovery", "featured")}
           </div>
         </aside>
         <section aria-live="polite">
