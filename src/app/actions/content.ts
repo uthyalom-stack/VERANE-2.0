@@ -13,6 +13,7 @@ import { addToCart } from "@/domains/cart";
 import { rateLimit } from "@/domains/identity";
 import { deleteOutfit, resolveOutfit, saveOutfit, setShared } from "@/domains/outfit";
 import { subscribe, unsubscribe } from "@/domains/newsletter";
+import { getSiteConfig } from "@/domains/site-content";
 
 /** Add several variants at once (Shop the Look / whole outfit). Each is validated individually; partial results are reported. */
 export async function addManyToBagAction(variantIds: string[]): Promise<ActionState<{ added: number; failed: string[] }>> {
@@ -40,7 +41,8 @@ export async function subscribeAction(_: ActionState, form: FormData): Promise<A
     const e = getEnv(); const r = fd(form);
     if (!(await rateLimit(getDb(), `news:${await sha256Hex(await clientIp(), e.TOKEN_PEPPER)}`, 5, 60 * 60_000))) throw new AppError("RATE_LIMITED", "Too many attempts. Try again later.");
     await subscribe(getDb(), { email: r.email ?? "", consent: r.consent === "on" }, e.TOKEN_PEPPER);
-    return { ok: true, message: "You're on the list. Welcome to VÉRANE." };
+    const config = await getSiteConfig(getDb());
+    return { ok: true, message: `You're on the list. Welcome to ${config.settings.siteName}.` };
   });
 }
 export async function unsubscribeAction(_: ActionState, form: FormData): Promise<ActionState> {
