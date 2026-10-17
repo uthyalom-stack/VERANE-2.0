@@ -2,7 +2,7 @@
  * DEVELOPMENT SEED — sample data only. Every product/campaign here is clearly labelled SAMPLE and uses
  * placeholder media. Refuses to run when APP_ENV=production. Never mixes into production data.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createDb } from "../src/infrastructure/db/client";
 import * as s from "../src/infrastructure/db/schema";
 import { reconcileRbac } from "../src/domains/authorization/seed";
@@ -73,6 +73,12 @@ for (const p of sample) {
       description: "Sample catalog item for development only.", status: "published", isFeatured: true, categoryIds: [cat[p.cat]!], variants });
     await reindexProduct(db, id);
   } catch (e) { if (!String(e).includes("already exists")) throw e; }
+  // Keep the one development sale visible when this seed is rerun against an existing local database.
+  if (p.compareAtPrice !== null) {
+    const [existingSaleProduct] = await db.select({ id: s.products.id }).from(s.products)
+      .where(and(eq(s.products.brandId, brand[p.b]!.id), eq(s.products.name, p.name))).limit(1);
+    if (existingSaleProduct) await db.update(s.products).set({ compareAtPrice: p.compareAtPrice, updatedAt: new Date() }).where(eq(s.products.id, existingSaleProduct.id));
+  }
 }
 
 // Homepage as structured, CMS-editable blocks
@@ -104,7 +110,7 @@ for (const p of allProducts.filter((row) => row.name.startsWith("SAMPLE "))) {
   if (mediaId) await db.insert(s.productMedia).values({ productId: p.id, mediaId, role: "primary", sortOrder: 0 });
 }
 const uthyProducts = allProducts.filter((p) => p.brandId === brand.UTHY_LUXURY!.id);
-const [col] = await db.insert(s.collections).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-evening-edit", title: "SAMPLE Evening Edit", description: "Sample collection for development.", heroMediaId: media["placeholders/look-1.svg"], status: "published", isFeatured: true }).onConflictDoNothing().returning();
+const [col] = await db.insert(s.collections).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-evening-edit", title: "SAMPLE Limited Edit", description: "Sample curated collection for development only. Replace with a real limited release before production.", heroMediaId: media["placeholders/look-1.svg"], status: "published", isFeatured: true }).onConflictDoUpdate({ target: s.collections.slug, set: { title: "SAMPLE Limited Edit", description: "Sample curated collection for development only. Replace with a real limited release before production.", heroMediaId: media["placeholders/look-1.svg"], updatedAt: new Date() } }).returning();
 if (col) for (const [i, p] of uthyProducts.entries()) await db.insert(s.collectionProducts).values({ collectionId: col.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
 const [look] = await db.insert(s.looks).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-city-after-dark", title: "SAMPLE City After Dark", description: "Sample look for development.", stylingNotes: "Keep the line long and the accessories quiet.", imageMediaId: media["placeholders/look-1.svg"], status: "published" }).onConflictDoNothing().returning();
 if (look) for (const [i, p] of uthyProducts.entries()) await db.insert(s.lookItems).values({ lookId: look.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
