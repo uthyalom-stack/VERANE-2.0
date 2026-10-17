@@ -2,7 +2,7 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { adminCtx } from "@/lib/admin";
 import { analyticsSummary } from "@/domains/admin/ops";
 import { scopedBrandIds } from "@/domains/authorization";
-import { brands, orders, orderItems } from "@/infrastructure/db/schema";
+import { brands, orders, orderItems, categories, products, productCategories } from "@/infrastructure/db/schema";
 import { formatMoney } from "@/lib/money";
 import { PageHead, Panel, Table } from "@/components/admin/ui";
 
@@ -80,6 +80,35 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
         sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
       )).groupBy(orderItems.productName, orderItems.brandId).orderBy(desc(sql`sum(${orderItems.lineTotal})`)).limit(10);
 
+  const categoryRows = !canRead ? [] : await db.select({
+    name: categories.name, units: sql<number>`coalesce(sum(${orderItems.quantity}), 0)`,
+    revenue: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)`, orders: sql<number>`count(distinct ${orders.id})`,
+  }).from(categories).innerJoin(productCategories, eq(productCategories.categoryId, categories.id))
+    .innerJoin(products, eq(products.id, productCategories.productId))
+    .innerJoin(orderItems, eq(orderItems.productId, products.id)).innerJoin(orders, eq(orders.id, orderItems.orderId))
+    .where(and(eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`, scope === "all" ? undefined : inArray(orderItems.brandId, scope)))
+    .groupBy(categories.id, categories.name).orderBy(desc(sql`sum(${orderItems.lineTotal})`)).limit(10);
+
+  const dailySales = !canRead ? [] : scope === "all"
+    ? await db.select({ day: sql<string>`date(${orders.createdAt} / 1000, 'unixepoch')`, orders: sql<number>`count(*)`, revenue: sql<number>`coalesce(sum(${orders.total}), 0)` })
+        .from(orders).where(and(eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`))
+        .groupBy(sql`date(${orders.createdAt} / 1000, 'unixepoch')`).orderBy(sql`date(${orders.createdAt} / 1000, 'unixepoch')`)
+    : await db.select({ day: sql<string>`date(${orders.createdAt} / 1000, 'unixepoch')`, orders: sql<number>`count(distinct ${orders.id})`, revenue: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)` })
+        .from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId))
+        .where(and(inArray(orderItems.brandId, scope), eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`))
+        .groupBy(sql`date(${orders.createdAt} / 1000, 'unixepoch')`).orderBy(sql`date(${orders.createdAt} / 1000, 'unixepoch')`);
+
+  const customerRows = !canRead ? [] : scope === "all"
+    ? await db.select({ email: orders.email, firstOrder: sql<number>`min(${orders.createdAt})`, lastOrder: sql<number>`max(${orders.createdAt})`, orderCount: sql<number>`count(*)` })
+        .from(orders).where(and(eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} < ${until}`)).groupBy(orders.email)
+    : await db.select({ email: orders.email, firstOrder: sql<number>`min(${orders.createdAt})`, lastOrder: sql<number>`max(${orders.createdAt})`, orderCount: sql<number>`count(distinct ${orders.id})` })
+        .from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+        .where(and(inArray(orderItems.brandId, scope), eq(orders.paymentStatus, "paid"), sql`${orders.createdAt} < ${until}`)).groupBy(orders.email);
+  const customerTrend = {
+    firstTime: customerRows.filter((r) => Number(r.firstOrder) >= since && Number(r.firstOrder) < until).length,
+    repeat: customerRows.filter((r) => Number(r.orderCount) > 1 && Number(r.lastOrder) >= since && Number(r.lastOrder) < until).length,
+  };
+
   const brandNames = new Map(brandRows.map((b) => [b.id, b.name]));
 
   return (
@@ -112,6 +141,19 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
           p.units,
           formatMoney(p.revenue),
         ])} empty="No paid product sales recorded in this period." />
+      </Panel>
+      <Panel title="Category performance">
+        <p className="mb-3 text-sm text-muted">Paid sales attributed to each category. Products assigned to multiple categories are counted in each relevant category.</p>
+        <Table head={["Category","Units sold","Orders","Item revenue"]} rows={categoryRows.map((r) => [r.name,r.units,r.orders,formatMoney(r.revenue)])} empty="No category sales recorded in this period." />
+      </Panel>
+      <Panel title="Daily sales trend">
+        <Table head={["Day (UTC)","Paid orders",scope === "all" ? "Order revenue" : "Brand item revenue"]} rows={dailySales.map((r) => [r.day,r.orders,formatMoney(r.revenue)])} empty="No paid sales recorded in this period." />
+      </Panel>
+      <Panel title="Customer trends">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="rounded-[var(--r-md)] border border-line p-4"><p className="text-sm text-muted">First-time customers</p><p className="display mt-2 text-4xl">{customerTrend.firstTime}</p><p className="mt-2 text-xs text-muted">First paid order in the selected period.</p></div>
+          <div className="rounded-[var(--r-md)] border border-line p-4"><p className="text-sm text-muted">Repeat customers</p><p className="display mt-2 text-4xl">{customerTrend.repeat}</p><p className="mt-2 text-xs text-muted">Multiple paid orders, including an order in this period.</p></div>
+        </div>
       </Panel>
       <Panel title="Orders by status">
         <Table head={["Status", "Orders"]} rows={statusRows.map((r) => [r.status.replaceAll("_", " "), r.count])} empty="No orders recorded in this period." />

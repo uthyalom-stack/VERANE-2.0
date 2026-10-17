@@ -1,0 +1,26 @@
+import { adminCtx } from "@/lib/admin";
+import { assertCan } from "@/domains/authorization";
+import { DEFAULT_FOOTER_LINKS, DEFAULT_NAVIGATION, getSiteConfig, getStaticContent } from "@/domains/site-content";
+import { PageHead, Panel } from "@/components/admin/ui";
+import { saveSiteContentAction } from "@/app/actions/site-content";
+export const dynamic = "force-dynamic";
+const input = "mt-1 min-h-11 w-full rounded border border-line bg-surface px-3 text-sm";
+const area = "mt-1 min-h-28 w-full rounded border border-line bg-surface px-3 py-2 text-sm";
+const label = "block text-sm";
+const submit = "min-h-11 rounded border border-line px-4 text-sm hover:bg-surface";
+export default async function SiteContentAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
+ const { db, actor } = await adminCtx(); assertCan(actor, "content.write", null);
+ const [config, about, contact, faq, params] = await Promise.all([getSiteConfig(db), getStaticContent(db,"about"), getStaticContent(db,"contact"), getStaticContent(db,"faq"), searchParams]);
+ const s = config.settings, faqLines = (faq.faqs ?? []).map(x => x.question + " | " + x.answer).join("\n");
+ return <div><PageHead title="Site content & settings" sub="Edit public pages, navigation, footer, contact details and the announcement bar without a deploy." />
+ {params.saved && <p role="status" className="mb-5 rounded border border-line p-3 text-sm">Changes saved.</p>}
+ {params.error && <p role="alert" className="mb-5 rounded border border-red-500/40 p-3 text-sm">Save failed. Check the fields and try again.</p>}
+ <Panel title="Branding, contact and announcement bar"><form action={saveSiteContentAction} className="grid gap-4 md:grid-cols-2"><input type="hidden" name="section" value="settings" />
+ {([["Site name","siteName",s.siteName],["Tagline","tagline",s.tagline],["Contact email","contactEmail",s.contactEmail],["Phone","phone",s.phone],["WhatsApp number or link","whatsapp",s.whatsapp],["Instagram URL","instagram",s.instagram],["Facebook URL","facebook",s.facebook],["X URL","x",s.x],["YouTube URL","youtube",s.youtube]] as const).map(([t,n,v]) => <label key={n} className={label}>{t}<input className={input} name={n} defaultValue={v} maxLength={n==="siteName"?80:300} type={n==="contactEmail"?"email":"text"}/></label>)}
+ <label className="flex items-center gap-3 text-sm md:col-span-2"><input type="checkbox" name="announcementEnabled" defaultChecked={s.announcementEnabled} className="size-4"/>Show announcement bar</label>
+ <label className={label+" md:col-span-2"}>Announcement message<input className={input} name="announcementText" maxLength={240} defaultValue={s.announcementText}/></label><button className={submit+" md:col-span-2"}>Save site settings</button></form></Panel>
+ <Panel title="Navigation links"><p className="mb-3 text-sm text-muted">JSON array of labels and internal paths or HTTPS URLs.</p><form action={saveSiteContentAction} className="grid gap-3"><input type="hidden" name="section" value="navigation"/><textarea className={area} name="links" defaultValue={JSON.stringify(config.navigation.length?config.navigation:DEFAULT_NAVIGATION,null,2)} spellCheck={false} required/><button className={submit}>Save navigation</button></form></Panel>
+ <Panel title="Footer links and text"><form action={saveSiteContentAction} className="grid gap-3"><input type="hidden" name="section" value="footer"/><label className={label}>Footer links JSON<textarea className={area} name="links" defaultValue={JSON.stringify(config.footerLinks.length?config.footerLinks:DEFAULT_FOOTER_LINKS,null,2)} spellCheck={false} required/></label><label className={label}>Footer note<input className={input} name="note" defaultValue={config.footerNote} maxLength={240}/></label><button className={submit}>Save footer</button></form></Panel>
+ {([["about",about,false],["contact",contact,false],["faq",faq,true]] as const).map(([slug,page,isFaq]) => <Panel key={slug} title={slug==="about"?"About page":slug==="contact"?"Contact page":"FAQ page"}><form action={saveSiteContentAction} className="grid gap-4"><input type="hidden" name="section" value={slug}/><label className={label}>Page title<input className={input} name="title" defaultValue={page.title} maxLength={120} required/></label><label className={label}>Page introduction/body<textarea className={area} name="body" defaultValue={page.body} maxLength={8000}/></label>{isFaq && <label className={label}>FAQs, one per line as question | answer<textarea className={area+" min-h-64"} name="faqs" defaultValue={faqLines} spellCheck={false}/><span className="text-xs text-muted">Use a vertical bar between question and answer.</span></label>}<button className={submit}>Save {slug} page</button></form></Panel>)}
+ </div>;
+}
