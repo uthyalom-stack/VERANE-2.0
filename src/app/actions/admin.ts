@@ -450,6 +450,7 @@ export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): 
     if (!order) throw new AppError("NOT_FOUND", "Order not found");
     if (order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Fulfilment can only begin after payment is confirmed");
     const next = r.status;
+    if (!next) throw new AppError("VALIDATION", "Choose the next fulfilment status");
     const allowed = fulfilment.method === "pickup"
       ? (fulfilment.status === "unfulfilled" ? ["processing", "cancelled"] : fulfilment.status === "processing" ? ["ready_for_pickup", "cancelled"] : fulfilment.status === "ready_for_pickup" ? ["delivered"] : [])
       : (fulfilment.status === "unfulfilled" ? ["processing", "cancelled"] : fulfilment.status === "processing" ? ["shipped", "cancelled"] : fulfilment.status === "shipped" ? ["delivered"] : []);
