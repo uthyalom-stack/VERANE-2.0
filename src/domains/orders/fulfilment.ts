@@ -65,12 +65,12 @@ export async function createShipmentForOrder(db: Db, provider: ShippingProvider,
   }
   if (!attempted) throw new AppError("CONFLICT", "Every brand already has an active shipment");
 }
-const ORDER_FLOW: Record<string, string[]> = { paid: ["processing", "cancelled"], processing: ["shipped", "delivered", "cancelled"], shipped: ["delivered"], delivered: ["refunded"] };
-export async function setOrderStatus(db: Db, orderId: string, to: string, note: string, actorUserId: string | null) {
+const ORDER_FLOW: Record<string, string[]> = { paid: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"], delivered: ["refunded"] };
+export async function setOrderStatus(db: Db, orderId: string, to: string, note: string, actorUserId: string | null, options: { allowFulfilmentCompletion?: boolean } = {}) {
   const [o] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!o) throw new AppError("NOT_FOUND", "Order not found");
   if (o.status === to) return;
-  if (!(ORDER_FLOW[o.status] ?? []).includes(to) && !(o.status === "paid" && to === "processing")) throw new AppError("CONFLICT", `Cannot move an order from ${o.status} to ${to}`);
+  if (!(ORDER_FLOW[o.status] ?? []).includes(to) && !(o.status === "paid" && to === "processing") && !(options.allowFulfilmentCompletion && o.status === "processing" && to === "delivered")) throw new AppError("CONFLICT", `Cannot move an order from ${o.status} to ${to}`);
   const r = await db.update(orders).set({ status: to as never }).where(and(eq(orders.id, orderId), eq(orders.status, o.status)));
   if (((r as unknown as { rowsAffected?: number }).rowsAffected ?? 0) === 0) return; // lost a race; other writer already moved it
   await db.insert(orderStatusHistory).values({ orderId, fromStatus: o.status, toStatus: to, note, actorUserId });
@@ -106,7 +106,7 @@ export async function pollShipments(db: Db, provider: ShippingProvider): Promise
       if (t.status === "delivered") {
         await db.update(orderBrandFulfilments).set({ status: "delivered", fulfilledAt: new Date(), updatedAt: new Date() }).where(targetFulfilment);
         const all = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, s.orderId));
-        if (all.length && all.every((row) => row.status === "delivered")) await setOrderStatus(db, s.orderId, "delivered", "All brand fulfilments delivered", null).catch(() => undefined);
+        if (all.length && all.every((row) => row.status === "delivered")) await setOrderStatus(db, s.orderId, "delivered", "All brand fulfilments delivered", null, { allowFulfilmentCompletion: true }).catch(() => undefined);
       }
       changed++;
     } catch { /* provider hiccup: retry on next tick */ }
