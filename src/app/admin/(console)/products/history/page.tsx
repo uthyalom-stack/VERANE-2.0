@@ -3,7 +3,7 @@ import { listArchivedProductsForAdmin } from "@/domains/catalog/admin";
 import { restoreArchivedProductAction } from "@/app/actions/admin";
 import { brands } from "@/infrastructure/db/schema";
 import { can } from "@/domains/authorization";
-import { PageHead, Table, Badge, statusTone, A, when } from "@/components/admin/ui";
+import { PageHead, Table, A, when } from "@/components/admin/ui";
 import { formatMoney } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
