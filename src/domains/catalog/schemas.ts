@@ -62,7 +62,7 @@ export const shopQuery = z.object({
   size: z.string().optional(), color: z.string().optional(), style: z.string().optional(),
   occasion: z.string().optional(), type: z.string().optional(),
   availability: z.enum(["in_stock"]).optional(),
-  featured: z.coerce.boolean().optional(),
+  featured: z.coerce.boolean().optional(), sale: z.coerce.boolean().optional(),
   sort: z.enum(["featured", "newest", "price_asc", "price_desc"]).default("featured"),
   page: z.coerce.number().int().min(1).max(500).default(1),
   pageSize: z.coerce.number().int().min(1).max(48).default(24),
