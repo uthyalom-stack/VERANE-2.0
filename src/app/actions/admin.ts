@@ -284,6 +284,7 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
     }
     const publishAt = r.publishAt?.trim() ? new Date(r.publishAt) : null;
     if (publishAt && Number.isNaN(publishAt.getTime())) throw new AppError("VALIDATION", "Enter a valid publication date");
+    if (status === "scheduled" && !publishAt) throw new AppError("VALIDATION", "Choose a date for scheduled publication");
     try {
       await db.update(collaborations).set({ title, slug, description: description || null, coverMediaId, status: status as "draft" | "scheduled" | "published" | "archived", publishAt, updatedAt: new Date() }).where(eq(collaborations.id, collab.id));
     } catch (e) {
@@ -328,6 +329,14 @@ export async function saveCollaborationProductAction(_: ActionState, f: FormData
       if (a.status !== "published" || b.status !== "published") throw new AppError("CONFLICT", "Both source products must be published first");
       const variants = id ? await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, id)) : [];
       if (variants.length === 0) throw new AppError("CONFLICT", "Add at least one paired variant before publishing");
+      let validPairs = 0;
+      for (const pair of variants) {
+        if (!pair.brandAVariantId || !pair.brandBVariantId) continue;
+        const [av] = await db.select().from(productVariants).where(and(eq(productVariants.id, pair.brandAVariantId), eq(productVariants.productId, a.id), eq(productVariants.isActive, true)));
+        const [bv] = await db.select().from(productVariants).where(and(eq(productVariants.id, pair.brandBVariantId), eq(productVariants.productId, b.id), eq(productVariants.isActive, true)));
+        if (av && bv) validPairs++;
+      }
+      if (validPairs === 0) throw new AppError("CONFLICT", "At least one paired variant must still reference active variants from both published source products");
     }
     const values = { collaborationId, brandAProductId, brandBProductId, name, description: description || null, price, status, updatedAt: new Date() };
     let productId = id;
