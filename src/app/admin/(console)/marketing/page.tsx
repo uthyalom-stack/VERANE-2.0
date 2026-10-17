@@ -38,7 +38,7 @@ export default async function MarketingAdminPage() {
       </Panel>
       <Panel title="Workflow">
         <ol className="list-decimal space-y-2 pl-5 text-sm leading-6">
-          <li>Analyze the public storefront in each brand&apos;s Marketing AI project.</li>
+          <li>Analyze the public {siteConfig.settings.siteName} storefront in each brand&apos;s Marketing AI project.</li>
           <li>Generate platform-specific captions and creative from the saved brand context.</li>
           <li>Review and edit every draft before approval.</li>
           <li>Publish or schedule approved posts only after the relevant social account is connected.</li>
