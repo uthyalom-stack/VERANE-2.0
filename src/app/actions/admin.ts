@@ -423,10 +423,16 @@ export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): 
     }).where(eq(orderBrandFulfilments.id, fulfilment.id));
     if (next !== "cancelled" && order.status === "paid") await setOrderStatus(db, order.id, "processing", "Brand fulfilment started", actor.userId);
     const allFulfilments = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.id));
-    if (allFulfilments.length > 0 && allFulfilments.every((row) => row.status === "delivered")) {
-      const [freshOrder] = await db.select().from(orders).where(eq(orders.id, order.id));
-      if (freshOrder?.status === "paid") await setOrderStatus(db, order.id, "processing", "All fulfilments completed", actor.userId);
-      if (freshOrder && freshOrder.status !== "delivered") await setOrderStatus(db, order.id, "delivered", "All brand fulfilments completed", actor.userId);
+    const [freshOrder] = await db.select().from(orders).where(eq(orders.id, order.id));
+    if (freshOrder?.status === "paid" && allFulfilments.some((row) => row.status !== "unfulfilled" && row.status !== "cancelled")) await setOrderStatus(db, order.id, "processing", "Brand fulfilment started", actor.userId);
+    if (allFulfilments.length > 0 && allFulfilments.every((row) => row.status === "shipped" || row.status === "delivered") && allFulfilments.some((row) => row.status === "shipped") && freshOrder && freshOrder.status === "processing") {
+      await setOrderStatus(db, order.id, "shipped", "All delivery fulfilments shipped", actor.userId);
+    }
+    if (allFulfilments.length > 0 && allFulfilments.every((row) => row.status === "delivered") && freshOrder && freshOrder.status !== "delivered") {
+      const [latestOrder] = await db.select().from(orders).where(eq(orders.id, order.id));
+      if (latestOrder?.status === "paid") await setOrderStatus(db, order.id, "processing", "All fulfilments completed", actor.userId);
+      const [beforeDelivered] = await db.select().from(orders).where(eq(orders.id, order.id));
+      if (beforeDelivered && beforeDelivered.status !== "delivered") await setOrderStatus(db, order.id, "delivered", "All brand fulfilments completed", actor.userId);
     }
     await writeAudit(db, { actorUserId: actor.userId, action: "order.brand_fulfilment.update", entityType: "order", entityId: fulfilment.orderId, brandId: fulfilment.brandId, before: { status: fulfilment.status }, after: { status: next, method: fulfilment.method } });
     revalidatePath(`/admin/orders/${fulfilment.orderId}`);
