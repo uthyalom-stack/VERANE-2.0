@@ -1,6 +1,6 @@
 import { and, eq, inArray, desc } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
-import { inventoryLevels, productCategories, productVariants, products, slugRedirects, brands } from "@/infrastructure/db/schema";
+import { inventoryLevels, mediaAssets, productCategories, productVariants, products, slugRedirects, brands } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { assertCan, scopedBrandIds, type Actor } from "@/domains/authorization";
 import { writeAudit } from "@/domains/audit";
@@ -15,6 +15,7 @@ export async function createProduct(db: Db, actor: Actor, raw: unknown) {
     : undefined;
   assertCan(actor, "catalog.product.write", candidateBrandId ?? null);
   const input = productInput.parse(raw);
+  await assertSizeGuideMedia(db, input.sizeGuideMediaId ?? null, input.brandId);
   const [brand] = await db.select().from(brands).where(eq(brands.id, input.brandId));
   if (!brand?.isActive) throw new AppError("VALIDATION", "Unknown brand");
   const slug = resolveSlug(input);
@@ -54,6 +55,7 @@ export async function updateProduct(db: Db, actor: Actor, productId: string, raw
   assertCan(actor, "catalog.product.write", existing.brandId); // authorize before parsing client-controlled data
   const input = productInput.parse(raw);
   if (input.brandId !== existing.brandId) assertCan(actor, "catalog.product.write", input.brandId); // and target brand for moves
+  await assertSizeGuideMedia(db, input.sizeGuideMediaId ?? null, input.brandId);
   const slug = resolveSlug(input);
   await db.transaction(async (tx) => {
     const { id: _id, ...patch } = rowFrom(productId, input as ProductInput, slug);
@@ -110,6 +112,14 @@ export async function listProductsForAdmin(db: Db, actor: Actor, opts: { limit?:
   if (scope !== "all" && scope.length === 0) return [];
   const q = db.select().from(products).orderBy(desc(products.updatedAt)).limit(Math.min(opts.limit ?? 50, 200));
   return scope === "all" ? q : q.where(inArray(products.brandId, scope));
+}
+
+async function assertSizeGuideMedia(db: Db, mediaId: string | null, brandId: string) {
+  if (!mediaId) return;
+  const [asset] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, mediaId));
+  if (!asset || asset.kind !== "image" || (asset.brandId && asset.brandId !== brandId)) {
+    throw new AppError("VALIDATION", "Choose an image from this brand's media library for the size guide");
+  }
 }
 
 function rowFrom(id: string, i: ProductInput, slug: string): typeof products.$inferInsert {
