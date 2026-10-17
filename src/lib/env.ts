@@ -3,6 +3,7 @@ import { AppError } from "./errors";
 
 const schema = z.object({
   APP_URL: z.string().url().default("http://localhost:3000"),
+  MARKETING_AI_URL: z.string().url().optional(),
   APP_ENV: z.enum(["development", "test", "production"]).default("development"),
   DATABASE_URL: z.string().min(1).default("file:./local.db"),
   DATABASE_AUTH_TOKEN: z.string().optional(),
