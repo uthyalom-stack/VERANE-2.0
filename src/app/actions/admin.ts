@@ -202,7 +202,6 @@ export async function reviewCollaborationRequestAction(_: ActionState, f: FormDa
     await db.transaction(async (tx) => {
       if (status === "accepted") {
         const [from] = await tx.select().from(brands).where(eq(brands.id, request.fromBrandId));
-        const [to] = await tx.select().from(brands).where(eq(brands.id, request.toBrandId));
         const newCollaborationId = crypto.randomUUID();
         collaborationId = newCollaborationId;
         await tx.insert(collaborations).values({
