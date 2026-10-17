@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
 import { parseMajorToMinor } from "@/lib/money";
 import { AppError } from "@/lib/errors";
@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { brands } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationRequests, collaborations, orderAttributions, pickupLocations, products, trackingCampaigns, trackingCampaignVisits } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -129,3 +129,112 @@ export async function updateBrandAction(_: ActionState, f: FormData): Promise<Ac
 export async function createAdminUserAction(_: ActionState, f: FormData): Promise<ActionState> { return run(async () => { const r = fd(f); const out = await createAdminUser(getDb(), (await ctx()).actor, { email: r.email!, name: r.name! }); revalidatePath("/admin/users"); return { ok: true, message: `Created. Temporary password (shown once): ${out.tempPassword}` }; }); }
 export async function grantRoleAction(_: ActionState, f: FormData): Promise<ActionState> { return run(async () => { const r = fd(f); await grantRole(getDb(), (await ctx()).actor, r.userId!, r.role!, nul(r.brandId)); revalidatePath("/admin/users"); return { ok: true, message: "Role granted" }; }); }
 export async function revokeGrantAction(grantId: string): Promise<void> { await run(async () => { await revokeGrant(getDb(), (await ctx()).actor, grantId); revalidatePath("/admin/users"); }); }
+
+
+/** Create or update a social tracking link. Destinations must stay on-site to prevent open redirects. */
+export async function saveTrackingLinkAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const brandId = nul(r.brandId);
+    assertCan(actor, "content.write", brandId);
+    const name = (r.name ?? "").trim(); const slug = (r.slug ?? "").trim().toLowerCase();
+    const destination = (r.destination ?? "/").trim();
+    if (name.length < 2 || name.length > 120) throw new AppError("VALIDATION", "Campaign name must be 2–120 characters");
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 80) throw new AppError("VALIDATION", "Use a URL-safe slug with letters, numbers and hyphens");
+    if (!destination.startsWith("/") || destination.startsWith("//") || destination.includes("\\\\") || /[\\r\\n]/.test(destination)) throw new AppError("VALIDATION", "Destination must be a safe on-site path beginning with /");
+    const patch = { brandId, name, slug, platform: (r.platform || "Other").slice(0, 40), source: nul(r.source), medium: nul(r.medium), destination, isActive: r.isActive === "on", updatedAt: new Date() };
+    const id = nul(r.id);
+    if (id) {
+      const [old] = await db.select().from(trackingCampaigns).where(eq(trackingCampaigns.id, id));
+      if (!old) throw new AppError("NOT_FOUND", "Tracking link not found");
+      assertCan(actor, "content.write", old.brandId);
+      await db.update(trackingCampaigns).set(patch).where(eq(trackingCampaigns.id, id));
+    } else {
+      await db.insert(trackingCampaigns).values({ id: crypto.randomUUID(), ...patch });
+    }
+    revalidatePath("/admin/operations");
+    return { ok: true, message: id ? "Tracking link updated" : "Tracking link created" };
+  });
+}
+
+export async function createCollaborationRequestAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const fromBrandId = r.fromBrandId; const toBrandId = r.toBrandId;
+    if (!fromBrandId || !toBrandId || fromBrandId === toBrandId) throw new AppError("VALIDATION", "Choose two different brands");
+    assertCan(actor, "content.write", fromBrandId);
+    const [from] = await db.select().from(brands).where(eq(brands.id, fromBrandId));
+    const [to] = await db.select().from(brands).where(eq(brands.id, toBrandId));
+    if (!from?.isActive || !to?.isActive) throw new AppError("VALIDATION", "Both brands must be active");
+    const title = (r.title ?? "").trim(); const message = (r.message ?? "").trim();
+    if (title.length < 3 || title.length > 120) throw new AppError("VALIDATION", "Title must be 3–120 characters");
+    await db.insert(collaborationRequests).values({ id: crypto.randomUUID(), fromBrandId, toBrandId, title, message: message || null, status: "pending" });
+    revalidatePath("/admin/operations");
+    return { ok: true, message: "Collaboration request sent for review" };
+  });
+}
+
+export async function reviewCollaborationRequestAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const [request] = await db.select().from(collaborationRequests).where(eq(collaborationRequests.id, r.requestId!));
+    if (!request) throw new AppError("NOT_FOUND", "Collaboration request not found");
+    assertCan(actor, "content.write", request.toBrandId);
+    if (request.status !== "pending") throw new AppError("CONFLICT", "This request has already been reviewed");
+    const status = r.status;
+    if (status !== "accepted" && status !== "rejected") throw new AppError("VALIDATION", "Choose accept or reject");
+    let collaborationId: string | null = null;
+    await db.transaction(async (tx) => {
+      if (status === "accepted") {
+        const [from] = await tx.select().from(brands).where(eq(brands.id, request.fromBrandId));
+        const [to] = await tx.select().from(brands).where(eq(brands.id, request.toBrandId));
+        collaborationId = crypto.randomUUID();
+        await tx.insert(collaborations).values({
+          id: collaborationId, brandId: request.toBrandId, slug: "collaboration-" + request.id,
+          partnerName: from?.name ?? "VÉRANE partner", title: request.title, status: "draft",
+        });
+      }
+      await tx.update(collaborationRequests).set({ status, reviewedBy: actor.userId, reviewedAt: new Date(), collaborationId, updatedAt: new Date() }).where(eq(collaborationRequests.id, request.id));
+    });
+    await writeAudit(db, { actorUserId: actor.userId, action: "collaboration.request.review", entityType: "collaboration_request", entityId: request.id, brandId: request.toBrandId, before: { status: request.status }, after: { status, collaborationId } });
+    revalidatePath("/admin/operations"); revalidatePath("/admin/journal");
+    return { ok: true, message: status === "accepted" ? "Accepted. A draft collaboration has been created for editorial review." : "Collaboration request rejected" };
+  });
+}
+
+export async function savePickupLocationAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb(); const id = nul(r.id);
+    const brandId = r.brandId;
+    if (!brandId) throw new AppError("VALIDATION", "Choose a brand");
+    assertCan(actor, "orders.manage", brandId);
+    const name = (r.name ?? "").trim(); const addressLine1 = (r.addressLine1 ?? "").trim();
+    const city = (r.city ?? "").trim(); const state = (r.state ?? "").trim();
+    if (name.length < 2 || addressLine1.length < 4 || city.length < 2 || state.length < 2) throw new AppError("VALIDATION", "Complete the location name, address, city and state");
+    const patch = { brandId, name, addressLine1, addressLine2: nul(r.addressLine2), city, state, postalCode: nul(r.postalCode), country: "NG", instructions: nul(r.instructions), isActive: r.isActive === "on", updatedAt: new Date() };
+    if (id) {
+      const [old] = await db.select().from(pickupLocations).where(eq(pickupLocations.id, id));
+      if (!old) throw new AppError("NOT_FOUND", "Pickup location not found");
+      assertCan(actor, "orders.manage", old.brandId);
+      await db.update(pickupLocations).set(patch).where(eq(pickupLocations.id, id));
+    } else {
+      await db.insert(pickupLocations).values({ id: crypto.randomUUID(), ...patch });
+    }
+    revalidatePath("/admin/operations");
+    return { ok: true, message: id ? "Pickup location updated" : "Pickup location created" };
+  });
+}
+
+export async function cancelBackInStockSubscriptionAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const [sub] = await db.select({ subscription: backInStockSubscriptions, brandId: products.brandId })
+      .from(backInStockSubscriptions).innerJoin(products, eq(products.id, backInStockSubscriptions.productId))
+      .where(eq(backInStockSubscriptions.id, r.subscriptionId!));
+    if (!sub) throw new AppError("NOT_FOUND", "Subscription not found");
+    assertCan(actor, "inventory.read", sub.brandId);
+    await db.update(backInStockSubscriptions).set({ status: "cancelled", updatedAt: new Date() }).where(eq(backInStockSubscriptions.id, r.subscriptionId!));
+    revalidatePath("/admin/operations");
+    return { ok: true, message: "Subscription cancelled" };
+  });
+}
