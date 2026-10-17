@@ -13,7 +13,7 @@ import { attachProductMedia, detachProductMedia, removeVariant, reorderProductMe
 import { saveDiscount } from "@/domains/admin/discounts";
 import { saveArticle, saveCampaign, saveLook, savePageBlocks, setLookItems } from "@/domains/admin/content";
 import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
-import { createShipmentForOrder, adminSetOrderStatus, setOrderStatus } from "@/domains/orders/fulfilment";
+import { createShipmentForBrand, createShipmentForOrder, adminSetOrderStatus, setOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
 import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, orders, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
@@ -133,6 +133,16 @@ export async function savePageAction(_: ActionState, f: FormData): Promise<Actio
 
 export async function updateOrderStatusAction(_: ActionState, f: FormData): Promise<ActionState> { return run(async () => { const r = fd(f); await adminSetOrderStatus(getDb(), (await ctx()).actor, r.orderId!, r.status!, r.note ?? ""); revalidatePath(`/admin/orders/${r.orderId}`); return { ok: true, message: "Status updated" }; }); }
 export async function createShipmentAction(orderId: string): Promise<void> { await run(async () => { await createShipmentForOrder(getDb(), getShippingProvider(), (await ctx()).actor, orderId); revalidatePath(`/admin/orders/${orderId}`); }); }
+
+export async function createBrandShipmentAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const orderId = r.orderId; const brandId = r.brandId;
+    if (!orderId || !brandId) throw new AppError("VALIDATION", "Order and brand are required");
+    await createShipmentForBrand(getDb(), getShippingProvider(), (await ctx()).actor, orderId, brandId);
+    revalidatePath(`/admin/orders/${orderId}`);
+    return { ok: true, message: "Brand shipment created" };
+  });
+}
 
 export async function updateAltAction(_: ActionState, f: FormData): Promise<ActionState> { return run(async () => { const r = fd(f); await updateAlt(getDb(), (await ctx()).actor, r.id!, r.altText ?? ""); revalidatePath("/admin/media"); return { ok: true, message: "Saved" }; }); }
 export async function updateBrandAction(_: ActionState, f: FormData): Promise<ActionState> {
