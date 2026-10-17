@@ -2,29 +2,32 @@ import Link from "next/link";
 import { Media } from "@/components/ui/media";
 import { formatMoney } from "@/lib/money";
 import type { CardData } from "@/domains/catalog/public";
+import { ProductQuickAdd } from "./product-quick-add";
 
 export function ProductCard({ item }: { item: CardData }) {
   const { product: p, brand } = item;
   const onSale = p.compareAtPrice && p.compareAtPrice > p.basePrice;
+  const productHref = `/product/${p.slug}?brand=${brand.slug}`;
   return (
-    <article className="product-card group relative" data-brand={brand.themeKey}>
-      <Link href={`/product/${p.slug}?brand=${brand.slug}`} className="block">
-        <div className="product-card__media relative aspect-[4/5] overflow-hidden rounded-[var(--r-md)] bg-surface">
-          {item.image ? <Media storageKey={item.image.key} alt={item.image.alt} sizes="(min-width:900px) 25vw, 78vw" className="product-card__image transition-transform duration-[var(--dur-3)] ease-[var(--ease)] group-hover:scale-[1.035]" /> : <div className="product-card__fallback relative grid h-full place-items-end overflow-hidden p-4 md:p-6"><span className="product-card__fallback-orb" aria-hidden="true" /><div className="relative z-10"><p className="text-[9px] uppercase tracking-[0.18em] text-muted">{brand.name}</p><p className="display mt-2 text-xl md:text-2xl">Image coming soon</p></div></div>}
-          {item.hoverImage && <div className="absolute inset-0 opacity-0 transition-opacity duration-[var(--dur-3)] group-hover:opacity-100 group-focus-within:opacity-100"><Media storageKey={item.hoverImage.key} alt={item.hoverImage.alt} className="transition-transform duration-[var(--dur-3)] ease-[var(--ease)] group-hover:scale-[1.035]" /></div>}
-          {!item.inStock && <span className="glass absolute left-3 top-3 rounded-full px-3 py-1 text-xs">Sold out</span>}
-          <span aria-hidden="true" className="product-card__view absolute bottom-3 right-3 translate-y-2 rounded-full bg-[var(--bg)] px-4 py-3 text-[10px] uppercase tracking-[0.16em] text-[var(--fg)] opacity-0 transition-all duration-[var(--dur-2)] group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">View piece ↗</span>
+    <article className="product-card group relative min-w-0" data-brand={brand.themeKey}>
+      <div className="product-card__media relative aspect-[4/5] overflow-hidden rounded-[var(--r-md)] bg-surface">
+        <Link href={productHref} className="absolute inset-0 z-0 block" aria-label={`View ${p.name}`}>
+          {item.image ? <Media storageKey={item.image.key} alt={item.image.alt} sizes="(min-width:1200px) 22vw, (min-width:900px) 30vw, 48vw" className="product-card__image transition-transform duration-[var(--dur-3)] ease-[var(--ease)] group-hover:scale-[1.035]" /> : <div className="product-card__fallback relative grid h-full place-items-end overflow-hidden p-4 md:p-6"><span className="product-card__fallback-orb" aria-hidden="true" /><div className="relative z-10"><p className="text-[9px] uppercase tracking-[0.18em] text-muted">{brand.name}</p><p className="display mt-2 text-xl md:text-2xl">Image coming soon</p></div></div>}
+        </Link>
+        {item.hoverImage && <div aria-hidden="true" className="pointer-events-none absolute inset-0 z-[1] opacity-0 transition-opacity duration-[var(--dur-3)] group-hover:opacity-100 group-focus-within:opacity-100"><Media storageKey={item.hoverImage.key} alt="" sizes="(min-width:1200px) 22vw, (min-width:900px) 30vw, 48vw" className="transition-transform duration-[var(--dur-3)] ease-[var(--ease)] group-hover:scale-[1.035]" /></div>}
+        {!item.inStock && <span className="glass pointer-events-none absolute left-3 top-3 z-10 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.12em]">Sold out</span>}
+        {onSale && <span className="product-card__sale pointer-events-none absolute right-3 top-3 z-10 rounded-full px-3 py-1 text-[10px] uppercase tracking-[0.12em]">Special price</span>}
+        <ProductQuickAdd productName={p.name} variants={item.variants} />
+      </div>
+      <Link href={productHref} className="product-card__details mt-4 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-[0.16em] text-muted">{brand.name}</p>
+          <h3 className="mt-2 text-base leading-snug transition-colors duration-[var(--dur-2)] group-hover:text-[var(--accent)] md:text-lg">{p.name}</h3>
+          {item.colors.length > 0 && <p className="mt-3 text-xs text-muted">{item.colors.length === 1 ? item.colors[0] : `${item.colors.length} colours`}</p>}
         </div>
-        <div className="product-card__details mt-4 flex items-start justify-between gap-4">
-          <div>
-            <p className="text-[10px] uppercase tracking-[0.16em] text-muted">{brand.name}</p>
-            <h3 className="mt-2 text-base leading-snug transition-colors duration-[var(--dur-2)] group-hover:text-[var(--accent)] md:text-lg">{p.name}</h3>
-            {item.colors.length > 0 && <p className="mt-3 text-xs text-muted">{item.colors.length === 1 ? item.colors[0] : `${item.colors.length} colours`}</p>}
-          </div>
-          <p className="whitespace-nowrap text-sm">
-            {onSale && <span className="mr-2 text-muted line-through">{formatMoney(p.compareAtPrice!, p.currency)}</span>}
-            {formatMoney(p.basePrice, p.currency)}
-          </p>
+        <div className="shrink-0 text-right text-sm">
+          {onSale && <span className="mb-1 block text-xs text-muted line-through">{formatMoney(p.compareAtPrice!, p.currency)}</span>}
+          <span>{formatMoney(p.basePrice, p.currency)}</span>
         </div>
       </Link>
     </article>
