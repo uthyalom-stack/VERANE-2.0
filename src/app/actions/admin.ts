@@ -9,6 +9,7 @@ import { requireAdmin } from "@/lib/http/session";
 import { run, fd, type ActionState } from "@/lib/http/action";
 import { archiveProduct, createProduct, restoreProduct, updateProduct } from "@/domains/catalog/admin";
 import { adjustStock } from "@/domains/inventory";
+import { queueBackInStockNotifications } from "@/domains/inventory/back-in-stock";
 import { attachProductMedia, detachProductMedia, removeVariant, reorderProductMedia, saveCategory, saveCollection, setCollectionProducts, setProductStatus, upsertVariant } from "@/domains/admin/catalog";
 import { saveDiscount } from "@/domains/admin/discounts";
 import { saveArticle, saveCampaign, saveLook, savePageBlocks, setLookItems } from "@/domains/admin/content";
@@ -64,20 +65,7 @@ export async function adjustStockAction(_: ActionState, f: FormData): Promise<Ac
     if (r.confirm !== "on" && Math.abs(delta) >= 20) throw new AppError("VALIDATION", "Large adjustments need the confirmation box ticked");
     const db = getDb();
     await adjustStock(db, (await ctx()).actor, { variantId: r.variantId!, delta, type: (r.type || "adjust") as never, reason: r.reason ?? "" });
-    const [stock] = await db.select({ onHand: inventoryLevels.onHand, reserved: inventoryLevels.reserved, productName: products.name, productSlug: products.slug, brandSlug: brands.slug })
-      .from(inventoryLevels).innerJoin(productVariants, eq(productVariants.id, inventoryLevels.variantId))
-      .innerJoin(products, eq(products.id, productVariants.productId)).innerJoin(brands, eq(brands.id, products.brandId))
-      .where(eq(inventoryLevels.variantId, r.variantId!));
-    if (stock && stock.onHand - stock.reserved > 0) {
-      const subs = await db.select().from(backInStockSubscriptions).where(and(eq(backInStockSubscriptions.variantId, r.variantId!), eq(backInStockSubscriptions.status, "active")));
-      for (const sub of subs) {
-        await db.insert(emailOutbox).values({
-          id: crypto.randomUUID(), dedupeKey: `back-in-stock:${sub.id}:${sub.updatedAt.getTime()}`, template: "back_in_stock", toEmail: sub.email,
-          payloadJson: { productName: stock.productName, productSlug: stock.productSlug, brandSlug: stock.brandSlug },
-        }).onConflictDoNothing();
-        await db.update(backInStockSubscriptions).set({ status: "notified", notifiedAt: new Date(), updatedAt: new Date() }).where(eq(backInStockSubscriptions.id, sub.id));
-      }
-    }
+    await queueBackInStockNotifications(db, r.variantId!);
     revalidatePath("/admin/inventory"); revalidatePath("/admin/operations"); return { ok: true, message: "Stock updated" };
   });
 }
