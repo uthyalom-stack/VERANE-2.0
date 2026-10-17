@@ -5,9 +5,8 @@ import { dollars } from "@/lib/admin";
 import type { products } from "@/infrastructure/db/schema";
 
 type P = typeof products.$inferSelect;
-export function ProductForm({ brands, categories, selectedCategoryIds, product }: { brands: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }>; selectedCategoryIds: string[]; mediaOptions?: Array<[string, string]>; product?: P }) {
+export function ProductForm({ brands, categories, selectedCategoryIds, mediaOptions = [], product }: { brands: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }>; selectedCategoryIds: string[]; mediaOptions?: Array<[string, string]>; product?: P }) {
   const t = (name: string, label: string, v?: string | null, o: Partial<FieldDef> = {}): FieldDef => ({ name, label, defaultValue: v ?? "", required: false, ...o });
-  const mediaOptions = arguments[0]?.mediaOptions ?? [];
   const fields: FieldDef[] = [
     { name: "brandId", label: "Brand", type: "select", options: brands.map((b) => [b.id, b.name]), defaultValue: product?.brandId },
     t("name", "Name", product?.name, { required: true }), t("slug", "Slug (auto from name if empty)", product?.slug, { hint: "Changing a slug creates a redirect from the old URL." }), t("subtitle", "Subtitle", product?.subtitle),
