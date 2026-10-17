@@ -230,3 +230,18 @@ footer nav a:hover { transform: translateX(3px); }
 .house-mobile-menu__nav a:hover { color: var(--accent); transform: translateX(5px); }
 .house-mobile-menu__nav a[href*="/brands/alomziee"] { color: color-mix(in oklab, var(--fg) 84%, #e4ff3a); }
 @media (prefers-reduced-motion: reduce) { .house-wordmark, .house-site-header nav a, .house-menu-button, .house-mobile-menu__nav a { transition: none; } }
+
+
+/* Keep the bag and checkout visually connected to the same house, with clear conversion hierarchy. */
+.house-cart-summary, .house-checkout-summary { border-color: color-mix(in oklab, var(--fg) 18%, transparent); background: color-mix(in oklab, var(--bg) 72%, transparent); }
+.house-cart-summary form input, .house-checkout-layout input, .house-checkout-layout select { transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
+.house-cart-summary form input:focus, .house-checkout-layout input:focus, .house-checkout-layout select:focus { border-color: color-mix(in oklab, var(--accent) 65%, transparent); outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 9%, transparent); }
+.house-checkout-section { padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
+.house-checkout-section:last-child { border-bottom: 0; }
+.house-checkout-summary { box-shadow: 0 20px 80px -35px rgb(0 0 0 / .7), inset 0 1px 0 rgb(255 255 255 / .14); }
+.house-checkout-summary > ul li { gap: 1.5rem; }
+.house-checkout-summary > p[role="alert"] { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .house-cart-summary, .house-checkout-summary { border-radius: var(--r-md); }
+  .house-checkout-summary { position: relative; }
+}
