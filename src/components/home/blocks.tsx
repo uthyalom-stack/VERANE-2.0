@@ -38,34 +38,51 @@ export async function HomeBlocks({ db, blocks }: { db: Db; blocks: Block[] }) {
 
 function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>> }) {
   const heroKey: Record<string, string> = { uthy: "placeholders/uthy-hero.svg", alomzie: "placeholders/alomzie-hero.svg" };
+  const copy: Record<string, { index: string; mood: string; action: string }> = {
+    uthy: { index: "01", mood: "Quiet confidence. Considered form.", action: "Enter the house" },
+    alomzie: { index: "02", mood: "Make the entrance yours.", action: "Explore the collection" },
+  };
   return (
-    <section aria-label="Campaign" className="relative">
+    <section aria-label="The VÉRANE fashion house" className="house-hero relative">
       <div className="split-hero">
-        {brands.map((b) => (
-          <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="group bg-bg text-fg">
-            <Media storageKey={heroKey[b.themeKey] ?? "placeholders/uthy-hero.svg"} alt={`${b.name} campaign (placeholder)`} priority className="absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-black/30" />
-            <div className="relative flex h-full min-h-[50svh] flex-col justify-end p-6 pb-14 md:p-12 md:pb-20">
-              <h2 className="display text-[clamp(2.5rem,7vw,7rem)]">{b.name}</h2>
-              <p className="mt-3 text-base text-fg/80">{b.tagline}</p>
-            </div>
-          </Link>
-        ))}
+        {brands.map((b) => {
+          const editorial = copy[b.themeKey] ?? copy.uthy!;
+          return (
+            <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="house-panel group">
+              <Media storageKey={heroKey[b.themeKey] ?? "placeholders/uthy-hero.svg"} alt={`${b.name} campaign placeholder artwork`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
+              <div aria-hidden="true" className="house-panel__shade absolute inset-0" />
+              <div className="house-panel__meta absolute inset-x-6 top-24 z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-white/75 md:inset-x-10 md:top-28">
+                <span>VÉRANE / {editorial.index}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span>
+              </div>
+              <div className="house-panel__copy relative z-10 flex h-full min-h-[50svh] flex-col justify-end p-6 pb-10 md:p-10 md:pb-14">
+                <p className="mb-4 text-xs uppercase tracking-[0.2em] text-white/75">{editorial.mood}</p>
+                <h2 className="display max-w-[10ch] text-[clamp(2.6rem,5.8vw,6.8rem)] leading-[0.88] text-white">{b.name}</h2>
+                <p className="mt-4 max-w-sm text-sm text-white/75 md:text-base">{b.tagline}</p>
+                <span className="house-panel__link mt-7 inline-flex w-fit items-center gap-4 border-b border-white/70 pb-2 text-xs uppercase tracking-[0.18em] text-white">
+                  {editorial.action}<span aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-2">↗</span>
+                </span>
+              </div>
+            </Link>
+          );
+        })}
       </div>
-      <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 hidden -translate-y-1/2 justify-center md:flex">
-        <div className="glass pointer-events-auto flex flex-col items-center gap-5 rounded-[var(--r-lg)] px-10 py-8 text-center">
-          <h1 className="display text-4xl lg:text-6xl">{str(data.title, "Two Brands. One Expression.")}</h1>
-          <ButtonLink href={str(data.ctaHref, "/shop")} variant="solid">{str(data.ctaLabel, "Shop the house")}</ButtonLink>
+      <div className="house-hero__statement pointer-events-none absolute inset-x-0 top-1/2 z-20 hidden -translate-y-1/2 justify-center px-8 lg:flex">
+        <div className="pointer-events-auto max-w-2xl text-center">
+          <p className="mb-5 text-[10px] uppercase tracking-[0.35em] text-white/75">An independent digital fashion house</p>
+          <h1 className="display text-[clamp(3.4rem,7vw,7.5rem)] leading-[0.86] text-white">{str(data.title, "Two Brands. One Expression.")}</h1>
+          <p className="mx-auto mt-6 max-w-md text-sm leading-relaxed text-white/75">{str(data.subtitle, "Two distinct creative worlds. One considered point of view.")}</p>
+          <ButtonLink href={str(data.ctaHref, "/shop")} variant="solid" className="mt-8">{str(data.ctaLabel, "Discover the house")}</ButtonLink>
         </div>
       </div>
-      <div className="px-5 py-8 md:hidden">
-        <h1 className="display text-5xl">{str(data.title, "Two Brands. One Expression.")}</h1>
-        <ButtonLink href={str(data.ctaHref, "/shop")} className="mt-6">{str(data.ctaLabel, "Shop the house")}</ButtonLink>
+      <div className="house-hero__mobile-statement px-6 pb-10 pt-9 lg:hidden">
+        <p className="mb-4 text-[10px] uppercase tracking-[0.28em] text-muted">An independent digital fashion house</p>
+        <h1 className="display max-w-[12ch] text-[clamp(2.8rem,12vw,5.5rem)] leading-[0.88]">{str(data.title, "Two Brands. One Expression.")}</h1>
+        <p className="mt-5 max-w-md text-sm leading-relaxed text-muted">{str(data.subtitle, "Two distinct creative worlds. One considered point of view.")}</p>
+        <ButtonLink href={str(data.ctaHref, "/shop")} variant="solid" className="mt-6">{str(data.ctaLabel, "Discover the house")}</ButtonLink>
       </div>
     </section>
   );
 }
-
 function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>> }) {
   return (
     <section className="mx-auto mt-28 grid max-w-[1600px] gap-16 px-5 md:grid-cols-2 md:px-10">
