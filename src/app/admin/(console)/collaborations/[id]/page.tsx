@@ -37,8 +37,6 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
     const [a] = await db.select().from(products).where(eq(products.id, cp.brandAProductId));
     const [b] = await db.select().from(products).where(eq(products.id, cp.brandBProductId));
     const variants = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, cp.id));
-    const [av] = a ? await db.select().from(productVariants).where(eq(productVariants.productId, a.id)) : [];
-    const [bv] = b ? await db.select().from(productVariants).where(eq(productVariants.productId, b.id)) : [];
     const aVariants = a ? await db.select().from(productVariants).where(eq(productVariants.productId, a.id)) : [];
     const bVariants = b ? await db.select().from(productVariants).where(eq(productVariants.productId, b.id)) : [];
     return { cp, a, b, variants, aVariants: aVariants.filter((v) => v.isActive), bVariants: bVariants.filter((v) => v.isActive) };
