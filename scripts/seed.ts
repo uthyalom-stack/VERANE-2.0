@@ -57,11 +57,11 @@ const ph = ["uthy-hero", "alomzie-hero", "look-1", "look-2", "product-1", "produ
 for (const k of ph) await db.insert(s.mediaAssets).values({ storageKey: `placeholders/${k}.svg`, kind: "image", mimeType: "image/svg+xml", byteSize: 1200, width: 1600, height: 1000, altText: `Placeholder artwork (${k})`, isPlaceholder: true }).onConflictDoNothing();
 
 const sample = [
-  { b: "UTHY_LUXURY", name: "SAMPLE Sculpted Column Dress", price: 18500000, type: "Dress", style: "Evening", occasion: "Event", cat: "dresses", sizes: ["XS", "S", "M", "L"], colors: [["Obsidian", "#121316"]] },
-  { b: "UTHY_LUXURY", name: "SAMPLE Architectural Wool Coat", price: 32000000, type: "Coat", style: "Tailored", occasion: "Work", cat: "outerwear", sizes: ["S", "M", "L"], colors: [["Pewter", "#8C9096"], ["Obsidian", "#121316"]] },
-  { b: "UTHY_LUXURY", name: "SAMPLE Satin Draped Top", price: 9800000, type: "Top", style: "Evening", occasion: "Event", cat: "tops", sizes: ["XS", "S", "M"], colors: [["Champagne", "#B9A27A"]] },
-  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Neon Block Sneaker", price: 7500000, type: "Sneaker", style: "Street", occasion: "Casual", cat: "sneakers", sizes: ["40", "41", "42", "43", "44"], colors: [["Ultramarine", "#2B2BFF"], ["Citrus", "#E4FF3A"]] },
-  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Graphic Platform Heel", price: 6900000, type: "Heel", style: "Statement", occasion: "Party", cat: "heels", sizes: ["37", "38", "39", "40"], colors: [["Lilac", "#C9B8FF"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Sculpted Column Dress", price: 18500000, compareAtPrice: null, type: "Dress", style: "Evening", occasion: "Event", cat: "dresses", sizes: ["XS", "S", "M", "L"], colors: [["Obsidian", "#121316"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Architectural Wool Coat", price: 32000000, compareAtPrice: null, type: "Coat", style: "Tailored", occasion: "Work", cat: "outerwear", sizes: ["S", "M", "L"], colors: [["Pewter", "#8C9096"], ["Obsidian", "#121316"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Satin Draped Top", price: 9800000, compareAtPrice: null, type: "Top", style: "Evening", occasion: "Event", cat: "tops", sizes: ["XS", "S", "M"], colors: [["Champagne", "#B9A27A"]] },
+  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Neon Block Sneaker", price: 7500000, compareAtPrice: null, type: "Sneaker", style: "Street", occasion: "Casual", cat: "sneakers", sizes: ["40", "41", "42", "43", "44"], colors: [["Ultramarine", "#2B2BFF"], ["Citrus", "#E4FF3A"]] },
+  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Graphic Platform Heel", price: 6900000, compareAtPrice: 8900000, type: "Heel", style: "Statement", occasion: "Party", cat: "heels", sizes: ["37", "38", "39", "40"], colors: [["Lilac", "#C9B8FF"]] },
 ];
 for (const p of sample) {
   const variants = p.colors.flatMap(([colorName, colorHex], ci) => p.sizes.map((size, si) => ({
@@ -69,7 +69,7 @@ for (const p of sample) {
     size, colorName, colorHex, isActive: true, sortOrder: ci * 10 + si, initialStock: 8,
   })));
   try {
-    const { id } = await createProduct(db, superActor, { brandId: brand[p.b]!.id, name: p.name, basePrice: p.price, productType: p.type, style: p.style, occasion: p.occasion,
+    const { id } = await createProduct(db, superActor, { brandId: brand[p.b]!.id, name: p.name, basePrice: p.price, compareAtPrice: p.compareAtPrice, productType: p.type, style: p.style, occasion: p.occasion,
       description: "Sample catalog item for development only.", status: "published", isFeatured: true, categoryIds: [cat[p.cat]!], variants });
     await reindexProduct(db, id);
   } catch (e) { if (!String(e).includes("already exists")) throw e; }
