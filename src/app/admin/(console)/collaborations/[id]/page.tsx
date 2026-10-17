@@ -5,6 +5,7 @@ import { can } from "@/domains/authorization";
 import { brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, productVariants, products } from "@/infrastructure/db/schema";
 import { PageHead, Panel, Table, Badge, when, toLocalInput } from "@/components/admin/ui";
 import { listMedia } from "@/domains/media";
+import { formatMoney } from "@/lib/money";
 import { ActionForm } from "@/components/ui/action-form";
 import { addCollaborationVariantAction, removeCollaborationVariantAction, saveCollaborationAction, saveCollaborationProductAction } from "@/app/actions/admin";
 
@@ -68,7 +69,7 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
 
     <Panel title="Collaboration products">
       {productDetails.length === 0 ? <p className="text-sm text-muted">No collaboration products yet.</p> : productDetails.map(({ cp, a, b, variants, aVariants, bVariants }) => <div key={cp.id} className="border-b border-line py-6 last:border-b-0">
-        <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium">{cp.name}</h3><p className="mt-1 text-sm text-muted">{a?.name ?? "Missing source product"} × {b?.name ?? "Missing source product"} · {cp.price} minor units</p><p className="mt-1 text-xs text-muted">{cp.description}</p></div><Badge tone={cp.status === "published" ? "ok" : cp.status === "draft" ? "warn" : ""}>{cp.status}</Badge></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h3 className="font-medium">{cp.name}</h3><p className="mt-1 text-sm text-muted">{a?.name ?? "Missing source product"} × {b?.name ?? "Missing source product"} · {formatMoney(cp.price, "NGN")}</p><p className="mt-1 text-xs text-muted">{cp.description}</p></div><Badge tone={cp.status === "published" ? "ok" : cp.status === "draft" ? "warn" : ""}>{cp.status}</Badge></div>
         <div className="mt-4 max-w-3xl"><ActionForm action={saveCollaborationProductAction} submitLabel="Save product" hidden={{ id: cp.id, collaborationId: collab.id }} fields={[
           { name: "name", label: "Product name", defaultValue: cp.name },
           { name: "price", label: "Displayed price (NGN)", defaultValue: (cp.price / 100).toFixed(2) },
@@ -78,7 +79,7 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
           { name: "status", label: "Publication", type: "select", defaultValue: cp.status, options: [["draft", "Draft"], ["published", "Publish"], ["archived", "Archive"]] },
         ]} /></div>
         <h4 className="mt-6 text-sm font-medium">Paired variants ({variants.length})</h4>
-        {variants.length ? <Table head={[aName + " variant", bName + " variant", "Added", "Action"]} rows={variants.map((v) => [`${v.brandAColor ?? "—"} ${v.brandASize ?? ""}`, `${v.brandBColor ?? "—"} ${v.brandBSize ?? ""}`, when(v.createdAt), cp.status !== "published" ? <form key={v.id} action={removeCollaborationVariantAction}><input type="hidden" name="variantId" value={v.id} /><button className="text-xs underline" type="submit">Remove</button></form> : "—"])} /> : <p className="mt-2 text-sm text-muted">Add at least one paired variant before publishing.</p>}
+        {variants.length ? <Table head={[aName + " variant", bName + " variant", "Added", "Action"]} rows={variants.map((v) => [`${v.brandAColor ?? "—"} ${v.brandASize ?? ""}`, `${v.brandBColor ?? "—"} ${v.brandBSize ?? ""}`, when(v.createdAt), cp.status !== "published" ? <div key={v.id} className="max-w-xs"><ActionForm action={removeCollaborationVariantAction} submitLabel="Remove paired variant" hidden={{ variantId: v.id }} fields={[]} /></div> : "—"])} /> : <p className="mt-2 text-sm text-muted">Add at least one paired variant before publishing.</p>}
         {cp.status !== "published" && aVariants.length && bVariants.length ? <div className="mt-4 max-w-3xl"><ActionForm action={addCollaborationVariantAction} submitLabel="Add paired variant" hidden={{ collaborationProductId: cp.id }} fields={[
           { name: "brandAVariantId", label: aName + " variant", type: "select", options: aVariants.map((v) => [v.id, `${v.sku} · ${v.colorName ?? ""} ${v.size ?? ""}`]) },
           { name: "brandBVariantId", label: bName + " variant", type: "select", options: bVariants.map((v) => [v.id, `${v.sku} · ${v.colorName ?? ""} ${v.size ?? ""}`]) },
