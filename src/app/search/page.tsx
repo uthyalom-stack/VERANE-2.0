@@ -25,7 +25,7 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
   }
   return (
     <div className="mx-auto max-w-[1600px] px-5 pb-16 pt-28 md:px-10">
-      <div className="house-index-intro flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><p className="house-kicker">Find your next piece</p><h1 className="display mt-4 text-6xl md:text-8xl">Search the house.</h1></div><p className="max-w-sm text-sm leading-relaxed text-muted">Search by product name, type, style or occasion across both VÉRANE brands.</p></div>
+      <div className="house-index-intro flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><p className="house-kicker">Find your next piece</p><h1 className="display mt-4 text-6xl md:text-8xl">Search the house.</h1></div><p className="max-w-sm text-sm leading-relaxed text-muted">Search by product name, type, style or occasion across the catalogue.</p></div>
       <form role="search" action="/search" className="house-search-form glass mt-8 flex max-w-3xl gap-3 rounded-[var(--r-md)] p-2">
         <label htmlFor="q" className="sr-only">Search the house</label>
         <input id="q" name="q" defaultValue={q} autoFocus placeholder="Black dress, sneakers, wool coat" className="min-h-12 min-w-0 flex-1 rounded-[var(--r-sm)] border border-transparent bg-transparent px-4 outline-none placeholder:text-muted focus:border-line" />
