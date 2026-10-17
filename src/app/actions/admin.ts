@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForBrand, createShipmentForOrder, adminSetOrderStatus, setOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, orders, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, orders, pages, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -128,7 +128,20 @@ export async function saveArticleAction(_: ActionState, f: FormData): Promise<Ac
   if (dest) redirect(dest); return res;
 }
 export async function savePageAction(_: ActionState, f: FormData): Promise<ActionState> {
-  return run(async () => { const r = fd(f); let blocks: Array<{ type: string; data: unknown }> = []; try { blocks = JSON.parse(r.blocks || "[]"); } catch { throw new AppError("VALIDATION", "Blocks are malformed"); } await savePageBlocks(getDb(), (await ctx()).actor, r.pageId!, { status: r.status === "published" ? "published" : "draft", blocks }); revalidatePath("/"); revalidatePath("/admin/pages"); return { ok: true, message: r.status === "published" ? "Published" : "Draft saved" }; });
+  return run(async () => {
+    const r = fd(f); let blocks: Array<{ type: string; data: unknown }> = [];
+    try { blocks = JSON.parse(r.blocks || "[]"); } catch { throw new AppError("VALIDATION", "Blocks are malformed"); }
+    const db = getDb(); const actor = (await ctx()).actor;
+    const [page] = await db.select().from(pages).where(eq(pages.id, r.pageId!));
+    await savePageBlocks(db, actor, r.pageId!, { status: r.status === "published" ? "published" : "draft", blocks });
+    if (page?.kind === "brand_landing" && page.brandId) {
+      const [brand] = await db.select().from(brands).where(eq(brands.id, page.brandId));
+      if (brand) revalidatePath(`/brands/${brand.slug}`);
+      revalidatePath(`/admin/brands/${page.brandId}/storefront`);
+    } else revalidatePath("/");
+    revalidatePath("/admin/pages");
+    return { ok: true, message: r.status === "published" ? "Published" : "Draft saved" };
+  });
 }
 
 export async function updateOrderStatusAction(_: ActionState, f: FormData): Promise<ActionState> { return run(async () => { const r = fd(f); await adminSetOrderStatus(getDb(), (await ctx()).actor, r.orderId!, r.status!, r.note ?? ""); revalidatePath(`/admin/orders/${r.orderId}`); return { ok: true, message: "Status updated" }; }); }
