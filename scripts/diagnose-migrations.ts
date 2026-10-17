@@ -7,7 +7,7 @@ rmSync(dbPath, { force: true });
 const { client } = createDb(`file:${dbPath}`);
 
 try {
-  const files = readdirSync("drizzle").filter((name) => /^\\d{4}_.+\\.sql$/.test(name)).sort();
+  const files = readdirSync("drizzle").filter((name) => /^\d{4}_.+\.sql$/.test(name)).sort();
   for (const file of files) {
     const statements = readFileSync(path.join("drizzle", file), "utf8")
       .split("--> statement-breakpoint")
