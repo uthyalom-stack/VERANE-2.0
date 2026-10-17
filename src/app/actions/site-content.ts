@@ -24,7 +24,7 @@ export async function saveSiteContentAction(form: FormData): Promise<void> {
    const old = (await getSiteConfig(db)).settings;
    const email = z.string().trim().max(160).refine(v => !v || z.string().email().safeParse(v).success, "Enter a valid email address").parse(r.contactEmail ?? "");
    const whatsapp = z.string().trim().max(100).refine(v => !v || /^https:\/\//i.test(v) || /^[+0-9() .-]+$/.test(v), "Use an HTTPS link or phone number").parse(r.whatsapp ?? "");
-   const selectedMedia = { uthyHeroMediaId: text(r.uthyHeroMediaId, 100) || null, alomzieHeroMediaId: text(r.alomzieHeroMediaId, 100) || null };
+   const selectedMedia = { uthyHeroMediaId: text(r.uthyHeroMediaId, 100) || null, alomzieHeroMediaId: text(r.alomzieHeroMediaId, 100) || null, logoMediaId: text(r.logoMediaId, 100) || null, faviconMediaId: text(r.faviconMediaId, 100) || null };
    for (const id of Object.values(selectedMedia)) { if (!id) continue; const [asset] = await db.select({ id: mediaAssets.id, kind: mediaAssets.kind }).from(mediaAssets).where(eq(mediaAssets.id, id)).limit(1); if (!asset || asset.kind !== "image") throw new Error("Select a valid image from the Media library."); }
    data = { ...old, ...selectedMedia, siteName: text(r.siteName, 80) || DEFAULT_SETTINGS.siteName, tagline: text(r.tagline, 180), announcementEnabled: r.announcementEnabled === "on", announcementText: text(r.announcementText, 240), contactEmail: email, phone: text(r.phone, 60), whatsapp, instagram: safeUrl(r.instagram), facebook: safeUrl(r.facebook), x: safeUrl(r.x), youtube: safeUrl(r.youtube) };
    slug = "site-settings"; title = "Site settings"; type = "site_settings";
