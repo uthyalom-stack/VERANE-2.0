@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -256,6 +256,46 @@ export async function cancelBackInStockSubscriptionAction(_: ActionState, f: For
 }
 
 
+/** Edit and publish the collaboration landing only after at least one paired product is published. */
+export async function saveCollaborationAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const id = r.collaborationId;
+    const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, id!));
+    if (!collab) throw new AppError("NOT_FOUND", "Collaboration not found");
+    assertCan(actor, "content.write", collab.brandId);
+    const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collab.id), eq(collaborationRequests.status, "accepted")));
+    if (!request) throw new AppError("CONFLICT", "An accepted partner request is required");
+    assertCan(actor, "content.write", request.fromBrandId); assertCan(actor, "content.write", request.toBrandId);
+    const title = (r.title ?? "").trim(); const slug = (r.slug ?? "").trim().toLowerCase();
+    const description = (r.description ?? "").trim(); const status = r.status;
+    if (title.length < 3 || title.length > 160) throw new AppError("VALIDATION", "Title must be 3–160 characters");
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) || slug.length > 100) throw new AppError("VALIDATION", "Use a URL-safe slug with letters, numbers and hyphens");
+    if (description.length > 3000) throw new AppError("VALIDATION", "Description is too long");
+    if (!["draft", "scheduled", "published", "archived"].includes(status)) throw new AppError("VALIDATION", "Choose a valid publication status");
+    const coverMediaId = nul(r.coverMediaId);
+    if (coverMediaId) {
+      const [cover] = await db.select().from(mediaAssets).where(eq(mediaAssets.id, coverMediaId));
+      if (!cover || cover.kind !== "image" || (cover.brandId && cover.brandId !== collab.brandId)) throw new AppError("VALIDATION", "Choose an image from this collaboration's brand media library");
+    }
+    if (status === "published") {
+      const published = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.collaborationId, collab.id), eq(collaborationProducts.status, "published")));
+      if (!published.length) throw new AppError("CONFLICT", "Publish at least one collaboration product before publishing the landing page");
+    }
+    const publishAt = r.publishAt?.trim() ? new Date(r.publishAt) : null;
+    if (publishAt && Number.isNaN(publishAt.getTime())) throw new AppError("VALIDATION", "Enter a valid publication date");
+    try {
+      await db.update(collaborations).set({ title, slug, description: description || null, coverMediaId, status: status as "draft" | "scheduled" | "published" | "archived", publishAt, updatedAt: new Date() }).where(eq(collaborations.id, collab.id));
+    } catch (e) {
+      if (String(e).includes("UNIQUE")) throw new AppError("CONFLICT", "That collaboration URL is already in use");
+      throw e;
+    }
+    await writeAudit(db, { actorUserId: actor.userId, action: "collaboration.publish", entityType: "collaboration", entityId: collab.id, brandId: collab.brandId, before: { status: collab.status, slug: collab.slug }, after: { status, slug, publishAt } });
+    revalidatePath("/admin/operations"); revalidatePath(`/admin/collaborations/${collab.id}`); revalidatePath("/collaborations"); revalidatePath(`/collaborations/${slug}`);
+    return { ok: true, message: status === "published" ? "Collaboration landing published" : "Collaboration landing saved" };
+  });
+}
+
 /** Save a draft collaboration product after validating both source brands and the accepted request. */
 export async function saveCollaborationProductAction(_: ActionState, f: FormData): Promise<ActionState> {
   return run(async () => {
@@ -294,6 +334,9 @@ export async function saveCollaborationProductAction(_: ActionState, f: FormData
     if (id) {
       const [existing] = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.id, id), eq(collaborationProducts.collaborationId, collaborationId)));
       if (!existing) throw new AppError("NOT_FOUND", "Collaboration product not found");
+      if (existing.status === "published" && status !== "published") { /* explicit unpublish is allowed before edits */ }
+      const existingVariants = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, id));
+      if (existingVariants.length && (existing.brandAProductId !== brandAProductId || existing.brandBProductId !== brandBProductId)) throw new AppError("CONFLICT", "Remove or recreate paired variants before changing source products");
       await db.update(collaborationProducts).set(values).where(eq(collaborationProducts.id, id));
     } else {
       productId = crypto.randomUUID();
