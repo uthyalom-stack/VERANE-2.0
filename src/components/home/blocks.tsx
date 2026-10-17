@@ -109,6 +109,9 @@ function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>>
 
 async function ProductRail({ db, data }: { db: Db; data: Record<string, unknown> }) {
   const source = str(data.source, "newest");
+  const title = str(data.title, source === "newest" ? "New arrivals" : source === "featured" ? "Trending now" : "Special price");
+  const eyebrow = source === "newest" ? "Fresh from the house" : source === "featured" ? "In the spotlight" : "A little something off";
+  const shopHref = source === "discounted" ? "/shop?sale=true" : source === "featured" ? "/shop?featured=true&sort=featured" : "/shop?sort=newest";
   const { items } = await listShopProducts(db, {
     sort: source === "newest" ? "newest" : "featured",
     ...(source === "featured" ? { featured: true } : {}),
@@ -118,8 +121,8 @@ async function ProductRail({ db, data }: { db: Db; data: Record<string, unknown>
   if (!items.length) return null;
   const cards = await toCardData(db, items);
   return (
-    <section aria-label={str(data.title, "Products")} className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10">
-      <div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">Considered pieces</p><h2 className="display mt-3 text-4xl md:text-5xl">{str(data.title, "New arrivals")}</h2></div><Link href="/shop?sort=newest" className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">View all <span aria-hidden="true">↗</span></Link></div>
+    <section aria-label={title} className="mx-auto mt-28 max-w-[1600px] px-5 md:px-10">
+      <div className="house-section-heading mb-8 flex items-end justify-between gap-4"><div><p className="house-kicker">{eyebrow}</p><h2 className="display mt-3 text-4xl md:text-5xl">{title}</h2></div><Link href={shopHref} className="house-text-link shrink-0 text-xs uppercase tracking-[0.14em]">View all <span aria-hidden="true">↗</span></Link></div>
       <div className="rail">{cards.map((c) => <ProductCard key={c.product.id} item={c} />)}</div>
     </section>
   );
