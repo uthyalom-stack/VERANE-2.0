@@ -41,7 +41,7 @@ export default async function ProductPage({ params, searchParams }: P) {
   const [wished, related, looks] = await Promise.all([isWished(db, customer?.id ?? null, p.id), relatedProducts(db, p), looksForProduct(db, p.id)]);
   void trackServer({ name: "product_view", brandId: p.brandId, entityType: "product", entityId: p.id });
   const base = getEnv().APP_URL;
-  const inStock = variants.some((v) => v.available > 0 || v.allowBackorder);
+  const inStock = variants.some((v) => v.available > 0 || v.allowBackorder || p.preOrderEnabled);
   const jsonLd = [
     { "@context": "https://schema.org", "@type": "Product", name: p.name, description: p.description ?? undefined, brand: { "@type": "Brand", name: b.name }, sku: variants[0]?.sku, image: media.filter((m) => m.m.kind === "image").map((m) => mediaUrl(m.m.storageKey)),
       offers: { "@type": "Offer", priceCurrency: p.currency, price: (p.basePrice / 100).toFixed(2), availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: `${base}/product/${p.slug}?brand=${b.slug}` } },
@@ -58,8 +58,8 @@ export default async function ProductPage({ params, searchParams }: P) {
           <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-muted"><Link href="/shop" className="transition-colors hover:text-fg">Shop</Link><span aria-hidden="true">/</span><Link href={`/brands/${b.slug}`} className="transition-colors hover:text-fg">{b.name}</Link></nav>
           <p className="house-kicker mt-7">{b.name} / The piece</p>
           <h1 className="display mt-3 text-5xl md:text-6xl">{p.name}</h1>{p.subtitle && <p className="mt-4 max-w-lg leading-relaxed text-muted">{p.subtitle}</p>}
-          <PurchasePanel productId={p.id} productName={p.name} currency={p.currency} signedIn={!!customer} wished={wished} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName, colorHex: v.colorHex, unitPrice: v.unitPrice, available: v.available, allowBackorder: v.allowBackorder }))} />
-          {!inStock && variants.length > 0 && <BackInStockForm productId={p.id} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName }))} />}
+          <PurchasePanel productId={p.id} productName={p.name} currency={p.currency} signedIn={!!customer} wished={wished} customSizingEnabled={p.customSizingEnabled} preOrderEnabled={p.preOrderEnabled} fulfillmentTime={p.fulfillmentTime} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName, colorHex: v.colorHex, unitPrice: v.unitPrice, available: v.available, allowBackorder: v.allowBackorder }))} />
+          {!inStock && !p.preOrderEnabled && variants.length > 0 && <BackInStockForm productId={p.id} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName }))} />}
           <div className="house-product-details mt-10 divide-y divide-line border-y border-line">{p.description && <p className="py-6 text-sm leading-relaxed">{p.description}</p>}
             {details.filter(([, v]) => v).map(([k, v]) => <details key={k} className="group py-4"><summary className="flex cursor-pointer list-none justify-between text-sm">{k}<span aria-hidden className="transition-transform group-open:rotate-45">+</span></summary><p className="mt-3 text-sm text-muted">{v}</p></details>)}</div>
         </div>
