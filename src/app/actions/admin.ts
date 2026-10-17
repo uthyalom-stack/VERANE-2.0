@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationRequests, collaborations, orderAttributions, pickupLocations, products, trackingCampaigns, trackingCampaignVisits } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationRequests, collaborations, pickupLocations, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
