@@ -9,7 +9,14 @@ export const metadata: Metadata = { title: "Shop", alternates: { canonical: "/sh
 export const dynamic = "force-dynamic";
 
 type SP = Record<string, string | string[] | undefined>;
-const flat = (sp: SP) => Object.fromEntries(Object.entries(sp).map(([k, v]) => [k, Array.isArray(v) ? v[0] : v]).filter(([, v]) => v));
+const flat = (sp: SP): Record<string, string> => {
+  const entries: Array<[string, string]> = [];
+  for (const [key, value] of Object.entries(sp)) {
+    const first = Array.isArray(value) ? value[0] : value;
+    if (typeof first === "string" && first.length > 0) entries.push([key, first]);
+  }
+  return Object.fromEntries(entries);
+};
 
 export default async function ShopPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = flat(await searchParams);
