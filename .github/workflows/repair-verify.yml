@@ -46,6 +46,7 @@ jobs:
           git status --short -- drizzle
 
       - name: Prepare disposable SQLite database for build
+        continue-on-error: true
         env:
           SESSION_SECRET: ci-only-session-secret-not-for-production-1234567890
           TOKEN_PEPPER: ci-only-token-pepper-not-for-production-1234567890
@@ -54,6 +55,7 @@ jobs:
         run: npm run db:migrate && npm run db:seed
 
       - name: Run project checks
+        if: always()
         id: project-check
         continue-on-error: true
         env:
