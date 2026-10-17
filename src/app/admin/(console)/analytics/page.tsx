@@ -6,17 +6,23 @@ import { brands, orders, orderItems } from "@/infrastructure/db/schema";
 import { formatMoney } from "@/lib/money";
 import { PageHead, Panel, Table } from "@/components/admin/ui";
 
-const WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
-
-export default async function Analytics() {
+export default async function Analytics({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { db, actor } = await adminCtx();
-  // eslint-disable-next-line react-hooks/purity -- this server-rendered report intentionally uses the request-time window
-  const since = Date.now() - WINDOW_MS;
+  const params = await searchParams;
+  const now = new Date();
+  const today = now.toISOString().slice(0, 10);
+  const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const validDate = (value?: string) => !!value && /^\\d{4}-\\d{2}-\\d{2}$/.test(value) && !Number.isNaN(new Date(value + "T00:00:00.000Z").getTime());
+  let from = validDate(params.from) ? params.from! : defaultFrom;
+  let to = validDate(params.to) ? params.to! : today;
+  if (from > to) { from = defaultFrom; to = today; }
+  const since = Date.parse(from + "T00:00:00.000Z");
+  const until = Date.parse(to + "T00:00:00.000Z") + 24 * 60 * 60 * 1000;
   const scope = scopedBrandIds(actor, "analytics.read");
   const canRead = scope === "all" || scope.length > 0;
 
   const [events, brandRows] = await Promise.all([
-    analyticsSummary(db, actor, 30),
+    analyticsSummary(db, actor, 30, { from: since, to: until }),
     db.select({ id: brands.id, name: brands.name }).from(brands),
   ]);
 
@@ -28,7 +34,7 @@ export default async function Analytics() {
           revenue: sql<number>`coalesce(sum(${orders.total}), 0)`,
         }).from(orders).where(and(
           eq(orders.paymentStatus, "paid"),
-          sql`${orders.createdAt} >= ${since}`,
+          sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
         )))[0] ?? { count: 0, revenue: 0 }
       : (await db.select({
           count: sql<number>`count(distinct ${orders.id})`,
@@ -36,20 +42,20 @@ export default async function Analytics() {
         }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(
           eq(orders.paymentStatus, "paid"),
           inArray(orderItems.brandId, scope),
-          sql`${orders.createdAt} >= ${since}`,
+          sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
         )))[0] ?? { count: 0, revenue: 0 };
 
   const statusRows = !canRead ? [] : scope === "all"
     ? await db.select({
         status: orders.status,
         count: sql<number>`count(*)`,
-      }).from(orders).where(sql`${orders.createdAt} >= ${since}`).groupBy(orders.status).orderBy(desc(sql`count(*)`))
+      }).from(orders).where(sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`).groupBy(orders.status).orderBy(desc(sql`count(*)`))
     : await db.select({
         status: orders.status,
         count: sql<number>`count(distinct ${orders.id})`,
       }).from(orders).innerJoin(orderItems, eq(orderItems.orderId, orders.id)).where(and(
         inArray(orderItems.brandId, scope),
-        sql`${orders.createdAt} >= ${since}`,
+        sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
       )).groupBy(orders.status).orderBy(desc(sql`count(distinct ${orders.id})`));
 
   const topProducts = !canRead ? [] : scope === "all"
@@ -60,7 +66,7 @@ export default async function Analytics() {
         revenue: sql<number>`coalesce(sum(${orderItems.lineTotal}), 0)`,
       }).from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId)).where(and(
         eq(orders.paymentStatus, "paid"),
-        sql`${orders.createdAt} >= ${since}`,
+        sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
       )).groupBy(orderItems.productName, orderItems.brandId).orderBy(desc(sql`sum(${orderItems.lineTotal})`)).limit(10)
     : await db.select({
         name: orderItems.productName,
@@ -70,14 +76,24 @@ export default async function Analytics() {
       }).from(orderItems).innerJoin(orders, eq(orders.id, orderItems.orderId)).where(and(
         eq(orders.paymentStatus, "paid"),
         inArray(orderItems.brandId, scope),
-        sql`${orders.createdAt} >= ${since}`,
+        sql`${orders.createdAt} >= ${since} AND ${orders.createdAt} < ${until}`,
       )).groupBy(orderItems.productName, orderItems.brandId).orderBy(desc(sql`sum(${orderItems.lineTotal})`)).limit(10);
 
   const brandNames = new Map(brandRows.map((b) => [b.id, b.name]));
 
   return (
     <div>
-      <PageHead title="Analytics" sub="Real store activity for the last 30 days. Revenue includes paid orders only; brand-scoped views use that brand's item totals." />
+      <PageHead title="Analytics" sub={`Real store activity from ${from} through ${to}. Revenue includes paid orders only; brand-scoped views use that brand&apos;s item totals.`} />
+      <form method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-[var(--r-md)] border border-line p-4">
+        <label className="grid gap-1 text-xs text-muted">From
+          <input type="date" name="from" defaultValue={from} max={to} className="min-h-10 rounded border border-line bg-surface px-3 text-sm text-fg" />
+        </label>
+        <label className="grid gap-1 text-xs text-muted">To
+          <input type="date" name="to" defaultValue={to} min={from} className="min-h-10 rounded border border-line bg-surface px-3 text-sm text-fg" />
+        </label>
+        <button type="submit" className="min-h-10 rounded border border-line px-4 text-sm hover:bg-surface">Apply dates</button>
+        <a href="/admin/analytics" className="min-h-10 px-3 py-2 text-sm underline underline-offset-4">Reset</a>
+      </form>
       <div className="mb-8 grid gap-4 sm:grid-cols-2">
         <div className="rounded-[var(--r-md)] border border-line p-5">
           <p className="text-sm text-muted">Paid orders</p>
