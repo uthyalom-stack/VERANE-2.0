@@ -71,13 +71,23 @@ async function quote(form: Record<string, string>) {
 
 export async function quoteShippingAction(form: Record<string, string>): Promise<ActionState<{ options: QuoteOption[] }>> {
   return run(async () => {
-    const { cartId, options } = await quote(form);
+    const a = addressSchema.parse(form);
+    const cartId = await peekCartId();
+    if (!cartId) throw new AppError("VALIDATION", "Your bag is empty");
     const db = getDb();
     const view = await getCartView(db, cartId, tax());
+    if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
+    if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable");
     const out: QuoteOption[] = [];
-    for (const o of options) {
-      const v = await getCartView(db, cartId, { ...tax(), shippingTotal: o.amountMinor });
-      out.push({ id: o.id, name: o.name, carrier: o.carrier, eta: o.etaText, amountMinor: o.amountMinor, total: v.pricing.total, method: "delivery" });
+    let deliveryError: unknown = null;
+    try {
+      const deliveryOptions = await quoteShipping(getShippingProvider(), { ...a, country: "NG" }, view.lines.map((l) => ({ name: l.name, quantity: l.quantity, unitPriceMinor: l.unitPrice })));
+      for (const option of deliveryOptions) {
+        const priced = await getCartView(db, cartId, { ...tax(), shippingTotal: option.amountMinor });
+        out.push({ id: option.id, name: option.name, carrier: option.carrier, eta: option.etaText, amountMinor: option.amountMinor, total: priced.pricing.total, method: "delivery" });
+      }
+    } catch (error) {
+      deliveryError = error;
     }
     const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
     if (brandIds.length === 1) {
@@ -86,6 +96,8 @@ export async function quoteShippingAction(form: Record<string, string>): Promise
         out.push({ id: `pickup:${location.id}`, name: location.name, carrier: "Pickup", eta: [location.addressLine1, location.addressLine2, location.city, location.state, location.instructions].filter(Boolean).join(", "), amountMinor: 0, total: view.pricing.total, method: "pickup" });
       }
     }
+    if (!out.length && deliveryError) throw deliveryError;
+    if (!out.length) throw new AppError("VALIDATION", "No delivery or pickup options are available for this order");
     return { ok: true, data: { options: out } };
   });
 }
@@ -95,18 +107,24 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
   let url: string | null = null;
   const res = await run(async () => {
     const optionId = z.string().min(1).parse(form.shippingOptionId);
-    const { a, cartId, options } = await quote(form);
-    const chosen = options.find((o) => o.id === optionId);
+    const a = addressSchema.parse(form);
+    const cartId = await peekCartId();
+    if (!cartId) throw new AppError("VALIDATION", "Your bag is empty");
+    const db = getDb();
+    const view = await getCartView(db, cartId, tax());
+    if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
+    if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable");
     let shipping: { id: string; name: string; amountMinor: number; meta?: Record<string, unknown> };
     if (optionId.startsWith("pickup:")) {
       const pickupLocationId = optionId.slice("pickup:".length);
-      const view = await getCartView(getDb(), cartId, tax());
       const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
       if (brandIds.length !== 1) throw new AppError("VALIDATION", "Pickup is available only when your bag contains products from one brand");
-      const [location] = await getDb().select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
+      const [location] = await db.select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
       if (!location) throw new AppError("VALIDATION", "That pickup location is no longer available. Please choose again.");
       shipping = { id: optionId, name: `Pickup — ${location.name}`, amountMinor: 0, meta: { method: "pickup", pickupLocationId: location.id } };
     } else {
+      const { options } = await quote(form);
+      const chosen = options.find((option) => option.id === optionId);
       if (!chosen) throw new AppError("VALIDATION", "That delivery option is no longer available. Please choose again.");
       shipping = { id: chosen.id, name: `${chosen.carrier} — ${chosen.name}`, amountMinor: chosen.amountMinor, meta: { method: "delivery" } };
     }
@@ -118,15 +136,15 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
       shipping,
       callbackUrl: `${env.APP_URL}/checkout/return`,
     });
-    const r = await startCheckout(getDb(), getPaymentProvider(), input, new Date(), { pepper: env.TOKEN_PEPPER, ...tax() });
+    const r = await startCheckout(db, getPaymentProvider(), input, new Date(), { pepper: env.TOKEN_PEPPER, ...tax() });
     const cookieStore = await cookies();
     try {
       const campaignId = cookieStore.get("vr_campaign")?.value;
       const visitorHash = cookieStore.get("vr_visitor")?.value;
       if (campaignId) {
-        const [campaign] = await getDb().select().from(trackingCampaigns).where(eq(trackingCampaigns.id, campaignId));
+        const [campaign] = await db.select().from(trackingCampaigns).where(eq(trackingCampaigns.id, campaignId));
         if (campaign?.isActive) {
-          await getDb().insert(orderAttributions).values({
+          await db.insert(orderAttributions).values({
             orderId: r.orderId, campaignId: campaign.id, brandId: campaign.brandId,
             visitorHash: visitorHash ?? null, model: "last_touch",
           }).onConflictDoNothing();
@@ -134,7 +152,7 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
       }
     } catch { /* attribution must never interrupt payment initialization */ }
     void trackServer({ name: "checkout_start", entityType: "order", entityId: r.orderId, props: { total: r.total } });
-    (await cookies()).set("vr_order_access", `${r.orderNumber}.${r.publicToken}`, { httpOnly: true, secure: env.APP_URL.startsWith("https://"), sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
+    cookieStore.set("vr_order_access", `${r.orderNumber}.${r.publicToken}`, { httpOnly: true, secure: env.APP_URL.startsWith("https://"), sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 });
     url = r.authorizationUrl;
   });
   if (url) redirect(url);
