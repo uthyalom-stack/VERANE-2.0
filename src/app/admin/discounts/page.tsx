@@ -8,7 +8,7 @@ import { saveDiscountAction } from "@/app/actions/admin";
 import { AdminActionForm, AdminField, AdminSelect } from "@/components/admin/action-form";
 
 export default async function AdminDiscountsPage() {
-  const {actor}=await requireAdmin(); const db=getDb(); const scope=scopedBrandIds(actor,"discounts.manage");
+  const {actor}=await requireAdmin(); const db=getDb(); const scope=scopedBrandIds(actor,"discounts.write");
   const brandRows=await db.select().from(brands).where(scope==="all"?undefined:inArray(brands.id,scope)).orderBy(asc(brands.name));
   const rows=await db.select({discount:discounts,brandName:brands.name}).from(discounts).leftJoin(brands,eq(brands.id,discounts.brandId)).where(scope==="all"?undefined:inArray(discounts.brandId,scope)).orderBy(desc(discounts.createdAt)).limit(100);
   return <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8"><Link href="/admin" className="text-sm text-neutral-500">← Admin workspace</Link><h1 className="mt-3 text-3xl font-semibold">Discounts</h1><p className="mt-2 text-sm text-neutral-600">Fixed discounts use naira in the form and are stored in kobo. Percentage discounts use a whole-number percentage.</p>
