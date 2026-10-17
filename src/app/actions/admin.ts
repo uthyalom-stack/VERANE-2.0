@@ -16,7 +16,7 @@ import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
 import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
-import { backInStockSubscriptions, brands, collaborationRequests, collaborations, emailOutbox, inventoryLevels, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
+import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
 import { writeAudit } from "@/domains/audit";
 import { assertCan } from "@/domains/authorization";
 
@@ -252,5 +252,99 @@ export async function cancelBackInStockSubscriptionAction(_: ActionState, f: For
     await db.update(backInStockSubscriptions).set({ status: "cancelled", updatedAt: new Date() }).where(eq(backInStockSubscriptions.id, r.subscriptionId!));
     revalidatePath("/admin/operations");
     return { ok: true, message: "Subscription cancelled" };
+  });
+}
+
+
+/** Save a draft collaboration product after validating both source brands and the accepted request. */
+export async function saveCollaborationProductAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const collaborationId = r.collaborationId;
+    const name = (r.name ?? "").trim();
+    const description = (r.description ?? "").trim();
+    const id = nul(r.id);
+    if (!collaborationId || name.length < 3 || name.length > 160) throw new AppError("VALIDATION", "Choose a collaboration and enter a product name (3–160 characters)");
+    if (description.length > 3000) throw new AppError("VALIDATION", "Description is too long");
+    const price = money(r.price);
+    if (price === null || !Number.isSafeInteger(price) || price < 0) throw new AppError("VALIDATION", "Enter a valid collaboration price");
+    const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, collaborationId));
+    if (!collab) throw new AppError("NOT_FOUND", "Collaboration not found");
+    assertCan(actor, "content.write", collab.brandId);
+    const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, collaborationId), eq(collaborationRequests.status, "accepted")));
+    if (!request) throw new AppError("CONFLICT", "This collaboration has no accepted partner request");
+    assertCan(actor, "content.write", request.fromBrandId);
+    assertCan(actor, "content.write", request.toBrandId);
+    const brandAProductId = r.brandAProductId;
+    const brandBProductId = r.brandBProductId;
+    const [a] = await db.select().from(products).where(eq(products.id, brandAProductId));
+    const [b] = await db.select().from(products).where(eq(products.id, brandBProductId));
+    if (!a || !b || a.brandId !== request.fromBrandId || b.brandId !== request.toBrandId) {
+      throw new AppError("VALIDATION", "Choose one product from the requesting brand and one from the partner brand");
+    }
+    if (a.id === b.id) throw new AppError("VALIDATION", "Choose two different source products");
+    const status = r.status === "published" ? "published" : r.status === "archived" ? "archived" : "draft";
+    if (status === "published") {
+      if (a.status !== "published" || b.status !== "published") throw new AppError("CONFLICT", "Both source products must be published first");
+      const variants = id ? await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, id)) : [];
+      if (variants.length === 0) throw new AppError("CONFLICT", "Add at least one paired variant before publishing");
+    }
+    const values = { collaborationId, brandAProductId, brandBProductId, name, description: description || null, price, status, updatedAt: new Date() };
+    let productId = id;
+    if (id) {
+      const [existing] = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.id, id), eq(collaborationProducts.collaborationId, collaborationId)));
+      if (!existing) throw new AppError("NOT_FOUND", "Collaboration product not found");
+      await db.update(collaborationProducts).set(values).where(eq(collaborationProducts.id, id));
+    } else {
+      productId = crypto.randomUUID();
+      await db.insert(collaborationProducts).values({ id: productId, ...values });
+    }
+    await writeAudit(db, { actorUserId: actor.userId, action: "collaboration.product.save", entityType: "collaboration_product", entityId: productId!, brandId: collab.brandId, after: values });
+    revalidatePath("/admin/operations"); revalidatePath(`/admin/collaborations/${collaborationId}`); revalidatePath(`/collaborations/${collab.slug}`); revalidatePath("/collaborations");
+    return { ok: true, message: status === "published" ? "Collaboration product published" : "Collaboration product saved" };
+  });
+}
+
+export async function addCollaborationVariantAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const collaborationProductId = r.collaborationProductId;
+    const [cp] = await db.select().from(collaborationProducts).where(eq(collaborationProducts.id, collaborationProductId!));
+    if (!cp) throw new AppError("NOT_FOUND", "Collaboration product not found");
+    const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, cp.collaborationId));
+    if (!collab) throw new AppError("NOT_FOUND", "Collaboration not found");
+    assertCan(actor, "content.write", collab.brandId);
+    const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, cp.collaborationId), eq(collaborationRequests.status, "accepted")));
+    if (!request) throw new AppError("CONFLICT", "Accepted partner request not found");
+    assertCan(actor, "content.write", request.fromBrandId); assertCan(actor, "content.write", request.toBrandId);
+    const aId = nul(r.brandAVariantId); const bId = nul(r.brandBVariantId);
+    if (!aId || !bId) throw new AppError("VALIDATION", "Choose a variant from each brand");
+    const [a] = await db.select().from(productVariants).where(and(eq(productVariants.id, aId), eq(productVariants.productId, cp.brandAProductId)));
+    const [b] = await db.select().from(productVariants).where(and(eq(productVariants.id, bId), eq(productVariants.productId, cp.brandBProductId)));
+    if (!a || !b || !a.isActive || !b.isActive) throw new AppError("VALIDATION", "Choose active variants belonging to the selected source products");
+    const duplicate = await db.select().from(collaborationProductVariants).where(and(eq(collaborationProductVariants.collaborationProductId, cp.id), eq(collaborationProductVariants.brandAVariantId, aId), eq(collaborationProductVariants.brandBVariantId, bId)));
+    if (duplicate.length) throw new AppError("CONFLICT", "That variant pair already exists");
+    await db.insert(collaborationProductVariants).values({ id: crypto.randomUUID(), collaborationProductId: cp.id, brandAVariantId: a.id, brandBVariantId: b.id, brandASize: a.size, brandAColor: a.colorName, brandBSize: b.size, brandBColor: b.colorName, onHand: 0, reserved: 0 });
+    await writeAudit(db, { actorUserId: actor.userId, action: "collaboration.variant.add", entityType: "collaboration_product", entityId: cp.id, brandId: collab.brandId, after: { brandAVariantId: a.id, brandBVariantId: b.id } });
+    revalidatePath(`/admin/collaborations/${cp.collaborationId}`);
+    return { ok: true, message: "Paired variant added" };
+  });
+}
+
+export async function removeCollaborationVariantAction(_: ActionState, f: FormData): Promise<ActionState> {
+  return run(async () => {
+    const r = fd(f); const { actor } = await ctx(); const db = getDb();
+    const [variant] = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.id, r.variantId!));
+    if (!variant) throw new AppError("NOT_FOUND", "Collaboration variant not found");
+    const [cp] = await db.select().from(collaborationProducts).where(eq(collaborationProducts.id, variant.collaborationProductId));
+    if (!cp) throw new AppError("NOT_FOUND", "Collaboration product not found");
+    const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, cp.collaborationId));
+    const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, cp.collaborationId), eq(collaborationRequests.status, "accepted")));
+    if (!collab || !request) throw new AppError("NOT_FOUND", "Collaboration not found");
+    assertCan(actor, "content.write", collab.brandId); assertCan(actor, "content.write", request.fromBrandId); assertCan(actor, "content.write", request.toBrandId);
+    if (cp.status === "published") throw new AppError("CONFLICT", "Unpublish the collaboration product before changing its variants");
+    await db.delete(collaborationProductVariants).where(eq(collaborationProductVariants.id, variant.id));
+    revalidatePath(`/admin/collaborations/${cp.collaborationId}`);
+    return { ok: true, message: "Paired variant removed" };
   });
 }
