@@ -33,6 +33,16 @@ jobs:
       - name: Generate a forward migration from the preserved migration history
         run: npm run db:generate
 
+      - name: Capture generated Drizzle migration for repair
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drizzle-generated-diff
+          path: |
+            drizzle/0005_*.sql
+            drizzle/meta/0005_snapshot.json
+          if-no-files-found: ignore
+
       - name: Confirm the forward migration history exists
         run: node -e 'const j = JSON.parse(require("node:fs").readFileSync("drizzle/meta/_journal.json", "utf8")); if (j.entries.length < 3) { console.error("Drizzle did not append a forward migration"); process.exit(1); }'
 
