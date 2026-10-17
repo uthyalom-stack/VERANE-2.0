@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound, permanentRedirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { slugRedirects } from "@/infrastructure/db/schema";
+import { mediaAssets, slugRedirects } from "@/infrastructure/db/schema";
 import { getDb } from "@/infrastructure/db/client";
 import { getPublishedProduct } from "@/domains/catalog/public";
 import { looksForProduct, relatedProducts } from "@/domains/content/public";
@@ -37,6 +37,7 @@ export default async function ProductPage({ params, searchParams }: P) {
   const db = getDb(); const d = await getPublishedProduct(db, brand ?? null, slug);
   if (!d) { const [r] = await db.select().from(slugRedirects).where(eq(slugRedirects.fromPath, `/product/${slug}`)); if (r) permanentRedirect(r.toPath); notFound(); } // renamed products keep working links
   const { product: p, brand: b, variants, media } = d;
+  const [sizeGuide] = p.sizeGuideMediaId ? await db.select().from(mediaAssets).where(eq(mediaAssets.id, p.sizeGuideMediaId)).limit(1) : [];
   const user = await getCurrentUser(); const customer = user?.kind === "customer" ? user : null;
   const [wished, related, looks] = await Promise.all([isWished(db, customer?.id ?? null, p.id), relatedProducts(db, p), looksForProduct(db, p.id)]);
   void trackServer({ name: "product_view", brandId: p.brandId, entityType: "product", entityId: p.id });
@@ -60,7 +61,7 @@ export default async function ProductPage({ params, searchParams }: P) {
           <h1 className="display mt-3 text-5xl md:text-6xl">{p.name}</h1>{p.subtitle && <p className="mt-4 max-w-lg leading-relaxed text-muted">{p.subtitle}</p>}
           <PurchasePanel productId={p.id} productName={p.name} currency={p.currency} signedIn={!!customer} wished={wished} customSizingEnabled={p.customSizingEnabled} preOrderEnabled={p.preOrderEnabled} fulfillmentTime={p.fulfillmentTime} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName, colorHex: v.colorHex, unitPrice: v.unitPrice, available: v.available, allowBackorder: v.allowBackorder }))} />
           {!inStock && !p.preOrderEnabled && variants.length > 0 && <BackInStockForm productId={p.id} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName }))} />}
-          <div className="house-product-details mt-10 divide-y divide-line border-y border-line">{p.description && <p className="py-6 text-sm leading-relaxed">{p.description}</p>}
+          <div className="house-product-details mt-10 divide-y divide-line border-y border-line">{p.description && <p className="py-6 text-sm leading-relaxed">{p.description}</p>}{sizeGuide?.kind === "image" && <details className="group py-4"><summary className="flex cursor-pointer list-none justify-between text-sm">Size guide<span aria-hidden className="transition-transform group-open:rotate-45">+</span></summary><div className="mt-4 max-w-xl overflow-hidden rounded-[var(--r-md)] bg-surface"><Media storageKey={sizeGuide.storageKey} alt={sizeGuide.altText ?? `${p.name} size guide`} /></div></details>}
             {details.filter(([, v]) => v).map(([k, v]) => <details key={k} className="group py-4"><summary className="flex cursor-pointer list-none justify-between text-sm">{k}<span aria-hidden className="transition-transform group-open:rotate-45">+</span></summary><p className="mt-3 text-sm text-muted">{v}</p></details>)}</div>
         </div>
       </div>
