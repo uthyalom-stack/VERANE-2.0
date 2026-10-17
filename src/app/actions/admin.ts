@@ -27,7 +27,7 @@ const ctx = () => requireAdmin();
 
 function productPayload(f: FormData) {
   const r = fd(f);
-  return { brandId: r.brandId, name: r.name, slug: nul(r.slug) ?? undefined, subtitle: nul(r.subtitle), description: nul(r.description), materials: nul(r.materials), fit: nul(r.fit), sizingInfo: nul(r.sizingInfo), customSizingEnabled: r.customSizingEnabled === "on", preOrderEnabled: r.preOrderEnabled === "on", fulfillmentTime: nul(r.fulfillmentTime), careInstructions: nul(r.careInstructions), deliveryInfo: nul(r.deliveryInfo),
+  return { brandId: r.brandId, name: r.name, slug: nul(r.slug) ?? undefined, subtitle: nul(r.subtitle), description: nul(r.description), materials: nul(r.materials), fit: nul(r.fit), sizingInfo: nul(r.sizingInfo), sizeGuideMediaId: nul(r.sizeGuideMediaId), customSizingEnabled: r.customSizingEnabled === "on", preOrderEnabled: r.preOrderEnabled === "on", fulfillmentTime: nul(r.fulfillmentTime), careInstructions: nul(r.careInstructions), deliveryInfo: nul(r.deliveryInfo),
     productType: nul(r.productType), style: nul(r.style), occasion: nul(r.occasion), currency: "NGN", basePrice: money(r.basePrice) ?? NaN, compareAtPrice: money(r.compareAtPrice), status: r.status || "draft", publishAt: dateOrNull(r.publishAt), isFeatured: r.isFeatured === "on", seoTitle: nul(r.seoTitle), seoDescription: nul(r.seoDescription), categoryIds: f.getAll("categoryIds").map(String) };
 }
 export async function saveProductAction(_: ActionState, f: FormData): Promise<ActionState> {
