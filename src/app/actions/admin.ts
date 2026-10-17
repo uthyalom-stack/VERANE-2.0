@@ -389,13 +389,13 @@ export async function addCollaborationVariantAction(_: ActionState, f: FormData)
     const collaborationProductId = r.collaborationProductId;
     const [cp] = await db.select().from(collaborationProducts).where(eq(collaborationProducts.id, collaborationProductId!));
     if (!cp) throw new AppError("NOT_FOUND", "Collaboration product not found");
-    if (cp.status === "published") throw new AppError("CONFLICT", "Unpublish the collaboration product before changing its paired variants");
     const [collab] = await db.select().from(collaborations).where(eq(collaborations.id, cp.collaborationId));
     if (!collab) throw new AppError("NOT_FOUND", "Collaboration not found");
     assertCan(actor, "content.write", collab.brandId);
     const [request] = await db.select().from(collaborationRequests).where(and(eq(collaborationRequests.collaborationId, cp.collaborationId), eq(collaborationRequests.status, "accepted")));
     if (!request) throw new AppError("CONFLICT", "Accepted partner request not found");
     assertCan(actor, "content.write", request.fromBrandId); assertCan(actor, "content.write", request.toBrandId);
+    if (cp.status === "published") throw new AppError("CONFLICT", "Unpublish the collaboration product before changing its paired variants");
     const aId = nul(r.brandAVariantId); const bId = nul(r.brandBVariantId);
     if (!aId || !bId) throw new AppError("VALIDATION", "Choose a variant from each brand");
     const [a] = await db.select().from(productVariants).where(and(eq(productVariants.id, aId), eq(productVariants.productId, cp.brandAProductId)));
