@@ -10,6 +10,6 @@ export default async function Products() {
   const { db, actor } = await adminCtx();
   const [list, bs] = await Promise.all([listProductsForAdmin(db, actor, { limit: 200 }), db.select().from(brands)]); const bn = new Map(bs.map((b) => [b.id, b.name]));
   const canCreate = bs.some((b) => can(actor, "catalog.product.write", b.id));
-  return (<div><PageHead title="Products" action={canCreate ? <ButtonLink href="/admin/products/new">New product</ButtonLink> : undefined} />
+  return (<div><PageHead title="Products" action={<div className="flex flex-wrap items-center gap-4"><A href="/admin/products/history">Archive history</A>{canCreate ? <ButtonLink href="/admin/products/new">New product</ButtonLink> : null}</div>} />
     <Table head={["Name", "Brand", "Price", "Status", "Updated"]} rows={list.map((p) => [<A key="n" href={`/admin/products/${p.id}`}>{p.name}</A>, bn.get(p.brandId), formatMoney(p.basePrice, p.currency), <Badge key="s" tone={statusTone(p.status)}>{p.status}</Badge>, when(p.updatedAt)])} empty="No products in your scope yet." /></div>);
 }
