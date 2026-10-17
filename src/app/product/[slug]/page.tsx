@@ -47,12 +47,12 @@ export default async function ProductPage({ params, searchParams }: P) {
     { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Shop", item: `${base}/shop` }, { "@type": "ListItem", position: 2, name: b.name, item: `${base}/brands/${b.slug}` }, { "@type": "ListItem", position: 3, name: p.name }] },
   ];
   const details: Array<[string, string | null]> = [["Materials", p.materials], ["Fit", p.fit], ["Sizing", p.sizingInfo], ["Care", p.careInstructions], ["Delivery", p.deliveryInfo]];
-  const gallery = media.length ? media.map((m) => ({ key: m.m.storageKey, alt: m.m.altText ?? p.name, kind: m.m.kind, poster: m.m.posterMediaId })) : [{ key: "placeholders/product-1.svg", alt: `${p.name} (placeholder)`, kind: "image" as const, poster: null }];
+  const gallery = media.length ? media.map((m) => ({ key: m.m.storageKey, alt: m.m.altText ?? p.name, kind: m.m.kind, poster: m.m.posterMediaId, variantId: m.pm.variantId })) : [{ key: "placeholders/product-1.svg", alt: `${p.name} (placeholder)`, kind: "image" as const, poster: null, variantId: null }];
   return (
     <div data-brand={b.themeKey} className="bg-bg text-fg">
       {jsonLd.map((j, i) => <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(j).replace(/</g, "\\u003c") }} />)}
       <div className="house-product-layout mx-auto grid max-w-[1600px] gap-8 px-5 pb-28 pt-24 md:grid-cols-[1.2fr_.8fr] md:gap-14 md:px-10 md:pb-16">
-        <ProductGallery items={gallery.map((g) => ({ src: mediaUrl(g.key), alt: g.alt, kind: g.kind === "video" ? "video" : "image" }))} />
+        <ProductGallery items={gallery.map((g) => ({ src: mediaUrl(g.key), alt: g.alt, kind: g.kind === "video" ? "video" : "image", variantId: g.variantId }))} />
         <div className="house-product-panel md:sticky md:top-24 md:self-start">
           <nav aria-label="Breadcrumb" className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.14em] text-muted"><Link href="/shop" className="transition-colors hover:text-fg">Shop</Link><span aria-hidden="true">/</span><Link href={`/brands/${b.slug}`} className="transition-colors hover:text-fg">{b.name}</Link></nav>
           <p className="house-kicker mt-7">{b.name} / The piece</p>
