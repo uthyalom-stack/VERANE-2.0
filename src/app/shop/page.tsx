@@ -87,7 +87,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
           <h1 className="display max-w-[9ch] text-6xl md:text-8xl">Find your next statement.</h1>
           <p className="max-w-sm text-sm leading-relaxed text-muted">Discover the latest pieces, styles and considered essentials from the catalogue.</p>
         </div>
-        <div className="glass relative mt-8 inline-flex items-center gap-3 rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em]"><span className="size-1.5 rounded-full bg-accent" /> Two brands. One expression.</div>
+        <div className="glass relative mt-8 inline-flex items-center gap-3 rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em]"><span className="size-1.5 rounded-full bg-accent" /> {siteConfig.settings.tagline}</div>
       </div>
       <div className="mt-10 grid gap-8 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr] lg:gap-12">
         <aside aria-label="Filters" className="house-shop-filters md:sticky md:top-24 md:self-start">
@@ -98,7 +98,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             </summary>
             <div className="mt-5">
               {activeFilterKeys.length > 0 && <Link href="/shop" className="mb-5 inline-flex min-h-10 items-center text-xs underline underline-offset-4">Clear all filters</Link>}
-              {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+              {group("Brand", "brand", brandRows.map((brand) => brand.slug))}
               {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
               {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
               {priceFilter}
@@ -109,7 +109,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
           </details>
           <div className="hidden md:block">
             <div className="mb-5 flex items-center justify-between"><p className="house-kicker">Refine the edit</p>{activeFilterKeys.length > 0 && <Link href="/shop" className="text-xs text-muted underline underline-offset-4">Clear all</Link>}</div>
-            {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+            {group("Brand", "brand", brandRows.map((brand) => brand.slug))}
             {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
             {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
             {priceFilter}
