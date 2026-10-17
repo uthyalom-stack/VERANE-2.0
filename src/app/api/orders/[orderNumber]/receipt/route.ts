@@ -63,7 +63,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderNumbe
   const bundle = await getOrderForViewer(getDb(), orderNumber, await viewerFromCookies(orderNumber), env.TOKEN_PEPPER);
   if (!bundle) return new Response("Not found", { status: 404 });
 
-  const { order, items } = bundle;
+  const { order, items, fulfillments } = bundle;
   const address = order.shippingAddressJson ?? {};
   const lines = [
     "VERANE",
@@ -97,6 +97,8 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderNumbe
     String(address.line2 ?? ""),
     [address.city, address.state, address.postalCode, address.country].filter(Boolean).join(", "),
     "",
+    "FULFILMENT",
+    ...fulfillments.flatMap((f) => { let p: Record<string, string> = {}; try { p = f.pickupLocationSnapshot ? JSON.parse(f.pickupLocationSnapshot) as Record<string, string> : {}; } catch { p = {}; } return [`${f.method.toUpperCase()}: ${f.status.replace(/_/g, " ")}`, ...(f.method === "pickup" ? [String(p.name ?? "Pickup location"), [p.addressLine1, p.addressLine2, p.city, p.state, p.postalCode].filter(Boolean).join(", "), String(p.instructions ?? "")] : [`${f.carrier ?? "Delivery"} ${f.trackingNumber ?? ""} ${f.trackingUrl ?? ""}`]), ""]; }),
     "Thank you for shopping with VERANE.",
     "Keep this receipt for your records.",
   ];
