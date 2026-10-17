@@ -62,7 +62,7 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
 
   const pay = () => start(async () => {
     setErr(null);
-    const result = await placeOrderAction({ ...f, shippingSelections: JSON.stringify(sel) });
+    const result = await placeOrderAction({ ...f, shippingSelections: JSON.stringify(sel), expectedTotal: String(pricedPricing?.total ?? -1) });
     if (result && !result.ok) setErr(result.message ?? "Payment could not be started");
   });
 
