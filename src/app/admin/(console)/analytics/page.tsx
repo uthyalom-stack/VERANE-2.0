@@ -12,7 +12,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const validDate = (value?: string) => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value + "T00:00:00.000Z").getTime());
+  const validDate = (value?: string) => !!value && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(new Date(value + "T00:00:00.000Z").getTime()) && new Date(value + "T00:00:00.000Z").toISOString().slice(0, 10) === value;
   let from = validDate(params.from) ? params.from! : defaultFrom;
   let to = validDate(params.to) ? params.to! : today;
   if (from > to) { from = defaultFrom; to = today; }
@@ -83,7 +83,7 @@ export default async function Analytics({ searchParams }: { searchParams: Promis
 
   return (
     <div>
-      <PageHead title="Analytics" sub={`Real store activity from ${from} through ${to}. Revenue includes paid orders only; brand-scoped views use that brand&apos;s item totals.`} />
+      <PageHead title="Analytics" sub={`Real store activity from ${from} through ${to}. Revenue includes paid orders only; brand-scoped views use that brand's item totals.`} />
       <form method="get" className="mb-8 flex flex-wrap items-end gap-3 rounded-[var(--r-md)] border border-line p-4">
         <label className="grid gap-1 text-xs text-muted">From
           <input type="date" name="from" defaultValue={from} max={to} className="min-h-10 rounded border border-line bg-surface px-3 text-sm text-fg" />
