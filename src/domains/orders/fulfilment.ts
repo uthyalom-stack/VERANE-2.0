@@ -23,8 +23,20 @@ export async function createShipmentForBrand(db: Db, provider: ShippingProvider,
   if (b.order.paymentStatus !== "paid") throw new AppError("CONFLICT", "Only paid orders can be shipped");
   const fulfilment = b.fulfillments.find((row) => row.brandId === brandId && row.method === "delivery");
   if (!fulfilment) throw new AppError("NOT_FOUND", "Delivery fulfilment for this brand was not found");
-  const stored = b.order.shippingOptionJson as unknown as ShippingOption & { meta?: { method?: string } };
-  if (stored.meta?.method === "pickup" || b.fulfillments.some((row) => row.method === "pickup")) throw new AppError("CONFLICT", "This order is for customer pickup and cannot create a delivery shipment");
+  const stored = b.order.shippingOptionJson as unknown as ShippingOption & {
+    meta?: {
+      method?: string;
+      brandSelections?: Array<{ brandId: string; method: "delivery" | "pickup"; id: string; amountMinor: number }>;
+    };
+  };
+  const brandSelection = stored.meta?.method === "per_brand"
+    ? stored.meta.brandSelections?.find((selection) => selection.brandId === brandId)
+    : null;
+  if (brandSelection && brandSelection.method !== "delivery") throw new AppError("CONFLICT", "This brand's order is for customer pickup, not delivery");
+  if (!brandSelection && (stored.meta?.method === "pickup" || b.fulfillments.some((row) => row.method === "pickup"))) {
+    throw new AppError("CONFLICT", "This order is for customer pickup and cannot create a delivery shipment");
+  }
+  if (stored.meta?.method === "per_brand" && !brandSelection) throw new AppError("CONFLICT", "The saved delivery selection for this brand is missing");
   if (b.shipments.some((shipment) => shipment.brandId === brandId && shipment.status !== "failed")) throw new AppError("CONFLICT", "This brand already has an active shipment");
 
   const unscoped = b.shipments.filter((shipment) => !shipment.brandId && shipment.status !== "failed");
@@ -42,8 +54,12 @@ export async function createShipmentForBrand(db: Db, provider: ShippingProvider,
   const dest: ShipAddress = { ...addr, email: b.order.email, phone: b.order.phone ?? addr.phone };
   const parcel = brandItems.map((item) => ({ name: item.productName, quantity: item.quantity, unitPriceMinor: item.unitPrice }));
   const rates = await provider.getRates(dest, parcel);
-  const fresh = rates.find((option) => option.id === stored.id);
+  const selectedOptionId = brandSelection?.id ?? stored.id;
+  const fresh = rates.find((option) => option.id === selectedOptionId);
   if (!fresh) throw new AppError("CONFLICT", "The delivery service paid for is unavailable for this brand's parcel. Review the shipment manually before creating a label.");
+  if (brandSelection && fresh.amountMinor !== brandSelection.amountMinor) {
+    throw new AppError("CONFLICT", "The carrier's rate changed after checkout for this brand. Review the price difference before creating a label.");
+  }
   const made = await provider.createShipment({ orderNumber: `${b.order.orderNumber}-${brandId.slice(0, 6)}`, dest, items: parcel, option: fresh });
   await db.insert(shippingRecords).values({ orderId, brandId, provider: provider.name, providerShipmentId: made.providerShipmentId, trackingNumber: made.trackingNumber, trackingUrl: made.trackingUrl, carrier: made.carrier, status: "label_created" });
   await db.update(orderBrandFulfilments).set({ status: "processing", carrier: made.carrier, trackingNumber: made.trackingNumber, trackingUrl: made.trackingUrl, updatedAt: new Date() }).where(eq(orderBrandFulfilments.id, fulfilment.id));
