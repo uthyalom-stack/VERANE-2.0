@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, inArray } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
 import { pageBlocks, pages } from "@/infrastructure/db/schema";
 import { scopedBrandIds } from "@/domains/authorization";
