@@ -7,7 +7,7 @@ import { expireStaleOrders, finalizePayment, handlePaymentWebhook, startCheckout
 import { createMockPaymentProvider } from "@/infrastructure/payments/mock";
 import { getAvailability } from "@/domains/inventory";
 import { hmacHex, sha256Hex } from "@/lib/crypto";
-import { emailOutbox, inventoryLevels, orders, paymentAttempts, productVariants, webhookEvents } from "@/infrastructure/db/schema";
+import { emailOutbox, inventoryLevels, orderBrandFulfilments, orders, paymentAttempts, pickupLocations, productVariants, webhookEvents } from "@/infrastructure/db/schema";
 
 let ctx: Awaited<ReturnType<typeof makeTestDb>>; let a: Awaited<ReturnType<typeof seedBrandsAndActors>>; let variantId = "";
 const provider = createMockPaymentProvider({ secret: "whsec" });
@@ -85,5 +85,42 @@ describe("checkout + payment finalisation", () => {
     const id = await cartWith(1);
     await ctx.db.update(inventoryLevels).set({ onHand: 0, reserved: 0 }).where(eq(inventoryLevels.variantId, variantId)); // simulate sell-out elsewhere
     await expect(checkout(id)).rejects.toMatchObject({ code: "OUT_OF_STOCK" });
+  });
+});
+
+describe("pickup checkout", () => {
+  it("creates a zero-fee pickup order with a server-validated location snapshot", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Loafer", basePrice: 850000, status: "published", variants: [{ sku: "PICK-1", size: "42", initialStock: 2 }] });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.uthy.id, name: "Studio pickup", addressLine1: "14 Marina Road", city: "Lagos", state: "Lagos", country: "NG", instructions: "Ask for the VÉRANE desk", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "pickup@example.com", phone: "08012345678", address,
+      shipping: { id: `pickup:${location!.id}`, name: "Pickup — Studio pickup", amountMinor: 0, meta: { method: "pickup", pickupLocationId: location!.id } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const [fulfilment] = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilment).toMatchObject({ method: "pickup", status: "unfulfilled", pickupLocationId: location!.id });
+    expect(JSON.parse(fulfilment!.pickupLocationSnapshot!)).toMatchObject({ name: "Studio pickup", city: "Lagos" });
+    const [savedOrder] = await ctx.db.select().from(orders).where(eq(orders.id, order.orderId));
+    expect(savedOrder!.shippingTotal).toBe(0);
+  });
+
+  it("rejects a pickup location that belongs to a different brand", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Sandal", basePrice: 650000, status: "published", variants: [{ sku: "PICK-2", size: "40", initialStock: 2 }] });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.alo.id, name: "Other brand pickup", addressLine1: "1 Other Road", city: "Lagos", state: "Lagos", country: "NG", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    await expect(startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "pickup@example.com", phone: "08012345678", address,
+      shipping: { id: `pickup:${location!.id}`, name: "Pickup — Other brand pickup", amountMinor: 0, meta: { method: "pickup", pickupLocationId: location!.id } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    })).rejects.toMatchObject({ code: "VALIDATION" });
   });
 });
