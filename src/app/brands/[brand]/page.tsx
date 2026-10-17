@@ -35,7 +35,7 @@ export default async function BrandPage({ params }: P) {
   return (
     <div data-brand={b.themeKey} className="bg-bg text-fg">
       <section className={`house-brand-hero relative isolate flex min-h-[88svh] items-end overflow-hidden ${uthy ? "house-brand-hero--uthy" : "house-brand-hero--alo"}`}>
-        <EditorialImage brand={uthy ? "uthy" : "alomzie"} alt={`${b.name} editorial campaign`} priority className="absolute inset-0 -z-10 opacity-75" />
+        <EditorialImage brandSlug={b.slug} alt={`${b.name} editorial campaign`} priority className="absolute inset-0 -z-10 opacity-75" />
         <div className="house-brand-hero__wash absolute inset-0 -z-10" />
         <div className="mx-auto w-full max-w-[1600px] px-5 pb-12 pt-32 md:px-10 md:pb-16">
           <div className={`house-brand-hero__panel glass max-w-4xl rounded-[var(--r-lg)] p-6 md:p-10 ${uthy ? "" : "md:ml-auto md:text-right"}`}>
