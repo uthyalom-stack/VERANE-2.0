@@ -1,7 +1,7 @@
 import { and, eq, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 import type { Db } from "@/infrastructure/db/client";
-import { carts, discounts, emailOutbox, orderItems, orderStatusHistory, orders, paymentAttempts, webhookEvents } from "@/infrastructure/db/schema";
+import { carts, discounts, emailOutbox, orderBrandFulfilments, orderItems, orderStatusHistory, orders, paymentAttempts, pickupLocations, webhookEvents } from "@/infrastructure/db/schema";
 import type { PaymentProvider } from "@/infrastructure/payments/types";
 import { AppError } from "@/lib/errors";
 import { randomToken, sha256Hex } from "@/lib/crypto";
@@ -18,7 +18,7 @@ export const checkoutInput = z.object({
   phone: z.string().trim().min(7).max(20),
   address: z.object({ recipientName: z.string().trim().min(2).max(120), line1: z.string().trim().min(3).max(200), line2: z.string().max(200).optional(), city: z.string().trim().min(2).max(80), state: z.string().trim().min(2).max(80), postalCode: z.string().max(20).optional(), country: z.literal("NG").default("NG") }),
   /** Shipping option chosen from a provider quote the SERVER re-fetched; amount here is re-checked by the caller against that quote. */
-  shipping: z.object({ id: z.string(), name: z.string(), amountMinor: z.number().int().min(0) }),
+  shipping: z.object({ id: z.string(), name: z.string(), amountMinor: z.number().int().min(0), meta: z.record(z.string(), z.unknown()).optional() }),
   callbackUrl: z.string().url(),
 });
 
@@ -35,6 +35,19 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
   if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
   if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable. Review your bag to continue.");
   if (view.discountError) throw new AppError("VALIDATION", view.discountError);
+  const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
+  const fulfillmentMethod = input.shipping.meta?.method === "pickup" ? "pickup" : "delivery";
+  let pickupLocation: typeof pickupLocations.$inferSelect | null = null;
+  if (fulfillmentMethod === "pickup") {
+    if (brandIds.length !== 1 || input.shipping.amountMinor !== 0) throw new AppError("VALIDATION", "Pickup is available only for a single-brand order and has no delivery fee");
+    const pickupLocationId = input.shipping.meta?.pickupLocationId;
+    if (typeof pickupLocationId !== "string") throw new AppError("VALIDATION", "Choose a pickup location");
+    const [location] = await db.select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
+    if (!location) throw new AppError("VALIDATION", "That pickup location is no longer available");
+    pickupLocation = location;
+  } else if (input.shipping.meta?.pickupLocationId) {
+    throw new AppError("VALIDATION", "Invalid delivery option");
+  }
   const orderId = crypto.randomUUID();
   const publicToken = randomToken(24);
   const number = orderNumber();
@@ -51,6 +64,7 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
         discountCode: cart?.discountCode ?? null, shippingAddressJson: input.address, shippingOptionJson: input.shipping, reservationExpiresAt: new Date(now.getTime() + RESERVATION_MS), cartId: input.cartId, publicTokenHash: await sha256Hex(publicToken, pepper),
       });
       for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal, fulfillmentTimeSnapshot: l.isPreOrder ? l.fulfillmentTime : null });
+      for (const brandId of brandIds) await tx.insert(orderBrandFulfilments).values({ id: crypto.randomUUID(), orderId, brandId, method: fulfillmentMethod, status: "unfulfilled", pickupLocationId: fulfillmentMethod === "pickup" ? pickupLocation!.id : null, pickupLocationSnapshot: fulfillmentMethod === "pickup" ? { name: pickupLocation!.name, addressLine1: pickupLocation!.addressLine1, addressLine2: pickupLocation!.addressLine2, city: pickupLocation!.city, state: pickupLocation!.state, postalCode: pickupLocation!.postalCode, country: pickupLocation!.country, instructions: pickupLocation!.instructions } : null });
       await tx.insert(paymentAttempts).values({ orderId, provider: provider.name, reference, amount: p.total, currency: view.currency });
       await tx.insert(orderStatusHistory).values({ orderId, fromStatus: null, toStatus: "pending_payment", note: "Order created" });
     });
