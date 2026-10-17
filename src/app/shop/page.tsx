@@ -26,6 +26,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock" };
     return labels[v] ?? v.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
+  const activeFilterKeys = ["brand", "type", "style", "occasion", "size", "color", "availability", "sale", "featured"].filter((key) => Boolean(sp[key]));
+  const activeFilterLabel = (key: string) => ({ brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "Sale", featured: "Featured" }[key] ?? key);
   const group = (label: string, key: string, values: string[]) => values.length === 0 ? null : (
     <fieldset className="house-filter-group mb-7 border-b border-line pb-6"><legend className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</legend>
       <div className="flex flex-wrap gap-2">{values.map((v) => (
@@ -43,16 +45,36 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       </div>
       <div className="mt-10 grid gap-8 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr] lg:gap-12">
         <aside aria-label="Filters" className="house-shop-filters md:sticky md:top-24 md:self-start">
-          <div className="mb-5 flex items-center justify-between"><p className="house-kicker">Refine the edit</p>{Object.values(sp).some(Boolean) && <Link href="/shop" className="text-xs text-muted underline underline-offset-4">Clear all</Link>}</div>
-          {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
-          {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
-          {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
-          {group("Availability", "availability", ["in_stock"])}
+          <details className="mb-7 rounded-[var(--r-md)] border border-line p-4 md:hidden">
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between gap-4 text-xs uppercase tracking-[0.16em] [&::-webkit-details-marker]:hidden">
+              <span>Refine the edit</span>
+              <span className="flex items-center gap-3 text-muted">{activeFilterKeys.length ? `${activeFilterKeys.length} active` : "Filters"} <span aria-hidden="true">＋</span></span>
+            </summary>
+            <div className="mt-5">
+              {activeFilterKeys.length > 0 && <Link href="/shop" className="mb-5 inline-flex min-h-10 items-center text-xs underline underline-offset-4">Clear all filters</Link>}
+              {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+              {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
+              {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
+              {group("Availability", "availability", ["in_stock"])}
+            </div>
+          </details>
+          <div className="hidden md:block">
+            <div className="mb-5 flex items-center justify-between"><p className="house-kicker">Refine the edit</p>{activeFilterKeys.length > 0 && <Link href="/shop" className="text-xs text-muted underline underline-offset-4">Clear all</Link>}</div>
+            {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+            {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
+            {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
+            {group("Availability", "availability", ["in_stock"])}
+          </div>
         </aside>
         <section aria-live="polite">
           <div className="house-shop-toolbar mb-6 flex flex-col gap-4 border-b border-line pb-5 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs uppercase tracking-[0.14em] text-muted">{cards.length} pieces shown <span className="mx-2 opacity-40">/</span> Page {query.page}</span>
             <nav aria-label="Sort" className="flex flex-wrap gap-x-4 gap-y-2 text-xs uppercase tracking-[0.1em]">{(["featured", "newest", "price_asc", "price_desc"] as const).map((s) => (
               <Link key={s} href={href({ sort: s })} aria-current={query.sort === s ? "true" : undefined} className="text-muted transition-colors hover:text-fg aria-[current=true]:text-accent aria-[current=true]:underline aria-[current=true]:underline-offset-4">{{ featured: "Featured", newest: "Newest", price_asc: "Price ↑", price_desc: "Price ↓" }[s]}</Link>))}</nav></div>
+          {activeFilterKeys.length > 0 && <div className="mb-6 flex flex-wrap items-center gap-2" aria-label="Active filters">
+            <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-muted">Applied</span>
+            {activeFilterKeys.map((key) => <Link key={key} href={href({ [key]: undefined })} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line px-3 py-2 text-xs transition-colors hover:border-accent hover:text-accent"><span>{activeFilterLabel(key)}: {pretty(sp[key]!)}</span><span aria-hidden="true">×</span><span className="sr-only">Remove {activeFilterLabel(key)} filter</span></Link>)}
+            <Link href="/shop" className="ml-1 min-h-9 px-2 py-2 text-xs text-muted underline underline-offset-4">Clear all</Link>
+          </div>}
           {cards.length === 0 ? <EmptyState title="Nothing matches those filters">Remove a filter to see more of the house.</EmptyState> : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-3 xl:grid-cols-4">{cards.map((c) => <ProductCard key={c.product.id} item={c} />)}</div>)}
           <div className="mt-12 flex justify-between text-sm">
