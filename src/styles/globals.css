@@ -51,14 +51,35 @@ p { max-width: 62ch; text-wrap: pretty; }
 }
 @supports not (backdrop-filter: blur(1px)) { .glass { background: color-mix(in oklab, var(--bg) 92%, transparent); } }
 
-/* The one orchestrated moment: a split hero that opens toward the brand you lean into. */
-.split-hero { display: flex; min-height: 100svh; }
-.split-hero > a { flex: 1 1 50%; position: relative; overflow: hidden; transition: flex-grow var(--dur-3) var(--ease); }
+/* The house entrance: two distinct worlds, one editorial frame. */
+.house-hero { isolation: isolate; background: var(--bg); }
+.split-hero { display: flex; min-height: min(100svh, 1100px); }
+.house-panel { flex: 1 1 50%; position: relative; display: block; min-width: 0; min-height: min(100svh, 900px); overflow: hidden; background: #171717; transition: flex-grow var(--dur-3) var(--ease); }
+.house-panel__image { transform: scale(1.015); }
+.house-panel__shade { background: linear-gradient(180deg, rgb(0 0 0 / .36) 0%, rgb(0 0 0 / .04) 35%, rgb(0 0 0 / .12) 54%, rgb(0 0 0 / .78) 100%); transition: opacity var(--dur-3) var(--ease); }
+.house-panel__copy { min-height: min(100svh, 900px); }
+.house-panel__link { transition: gap var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease); }
+.house-panel:focus-visible { outline-offset: -6px; }
+.house-hero__statement { text-shadow: 0 2px 24px rgb(0 0 0 / .25); }
+.house-hero__mobile-statement { border-bottom: 1px solid var(--line); }
 @media (hover: hover) and (min-width: 900px) {
-  .split-hero:has(a:hover) > a { flex-grow: 0.6; }
-  .split-hero > a:hover { flex-grow: 1.8; }
+  .split-hero:has(.house-panel:hover) .house-panel { flex-grow: .78; }
+  .split-hero .house-panel:hover { flex-grow: 1.22; }
+  .house-panel:hover .house-panel__image { opacity: .88; }
+  .house-panel:hover .house-panel__shade { opacity: .92; }
 }
-@media (max-width: 899px) { .split-hero { flex-direction: column; } .split-hero > a { min-height: 50svh; } }
+@media (max-width: 899px) {
+  .split-hero { flex-direction: column; min-height: auto; }
+  .house-panel { flex: none; min-height: clamp(25rem, 66svh, 42rem); }
+  .house-panel__copy { min-height: clamp(25rem, 66svh, 42rem); padding-top: 8rem; }
+  .house-panel__meta { top: 6rem; }
+  .house-hero__statement { display: none; }
+}
+@media (max-width: 420px) {
+  .house-panel { min-height: 28rem; }
+  .house-panel__copy { min-height: 28rem; }
+  .house-panel__meta { font-size: 8px; letter-spacing: .12em; }
+}
 
 .rail { display: grid; grid-auto-flow: column; grid-auto-columns: min(78vw, 320px); gap: 1rem; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .rail > * { scroll-snap-align: start; }
