@@ -38,8 +38,8 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
   const orderId = crypto.randomUUID();
   const publicToken = randomToken(24);
   const number = orderNumber();
-  const lines = view.lines.map((l) => ({ variantId: l.variantId, quantity: l.quantity }));
-  await reserveStock(db, lines, orderId); // atomic; throws OUT_OF_STOCK, nothing left reserved on failure
+  const lines = view.lines.filter((l) => !l.isPreOrder).map((l) => ({ variantId: l.variantId, quantity: l.quantity }));
+  if (lines.length) await reserveStock(db, lines, orderId); // atomic; throws OUT_OF_STOCK, nothing left reserved on failure
   const reference = `vr_${orderId.replace(/-/g, "").slice(0, 16)}_${randomToken(4)}`;
   const p = view.pricing;
   try {
@@ -50,7 +50,7 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
         status: "pending_payment", paymentStatus: "pending", subtotal: p.subtotal, discountTotal: p.discountTotal, shippingTotal: p.shippingTotal, taxTotal: p.taxTotal, total: p.total,
         discountCode: cart?.discountCode ?? null, shippingAddressJson: input.address, shippingOptionJson: input.shipping, reservationExpiresAt: new Date(now.getTime() + RESERVATION_MS), cartId: input.cartId, publicTokenHash: await sha256Hex(publicToken, pepper),
       });
-      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal });
+      for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal });
       await tx.insert(paymentAttempts).values({ orderId, provider: provider.name, reference, amount: p.total, currency: view.currency });
       await tx.insert(orderStatusHistory).values({ orderId, fromStatus: null, toStatus: "pending_payment", note: "Order created" });
     });
@@ -92,7 +92,8 @@ export async function finalizePayment(db: Db, provider: PaymentProvider, referen
   await db.update(paymentAttempts).set({ status: "success", verifiedAt: new Date(), providerTransactionId: v.providerTransactionId, rawResponseJson: v.raw }).where(and(eq(paymentAttempts.id, attempt.id), sql`${paymentAttempts.status} IN ('initialized','success')`));
 
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, order.id));
-  await commitSale(db, items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), order.id); // exactly-once via idempotency keys
+  const stockedItems = items.filter((i) => !i.isPreOrder);
+  if (stockedItems.length) await commitSale(db, stockedItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), order.id); // pre-orders do not claim unavailable inventory
 
   // single-statement claim: only the first caller flips pending_payment -> paid, and only they do the side effects
   const flipped = await db.update(orders).set({ status: "paid", paymentStatus: "paid" }).where(and(eq(orders.id, order.id), eq(orders.status, "pending_payment")));
@@ -141,7 +142,8 @@ export async function expireStaleOrders(db: Db, now = new Date()): Promise<numbe
     const claimed = await db.update(orders).set({ status: "expired", paymentStatus: "cancelled" }).where(and(eq(orders.id, o.id), eq(orders.status, "pending_payment")));
     if (affected(claimed) === 0) continue;
     const items = await db.select().from(orderItems).where(eq(orderItems.orderId, o.id));
-    await releaseReservation(db, items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), o.id);
+    const stockedItems = items.filter((i) => !i.isPreOrder);
+    if (stockedItems.length) await releaseReservation(db, stockedItems.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), o.id);
     await db.insert(orderStatusHistory).values({ orderId: o.id, fromStatus: "pending_payment", toStatus: "expired", note: "Reservation expired" });
     n++;
   }
