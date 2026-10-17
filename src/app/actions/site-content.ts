@@ -17,7 +17,7 @@ export async function saveSiteContentAction(form: FormData): Promise<void> {
   const { actor } = await requireAdmin(); assertCan(actor, "content.write", null);
   const db = getDb(), r = fd(form);
   const section = z.enum(["settings", "navigation", "footer", "about", "contact", "faq"]).parse(r.section);
-  let slug = section, title = section, type = section; let data: Record<string, unknown>;
+  let slug: string = section, title: string = section, type: string = section; let data: Record<string, unknown>;
   if (section === "settings") {
    const old = (await getSiteConfig(db)).settings;
    const email = z.string().trim().max(160).refine(v => !v || z.string().email().safeParse(v).success, "Enter a valid email address").parse(r.contactEmail ?? "");
