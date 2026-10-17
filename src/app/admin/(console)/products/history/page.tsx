@@ -2,6 +2,7 @@ import { adminCtx } from "@/lib/admin";
 import { listArchivedProductsForAdmin } from "@/domains/catalog/admin";
 import { restoreArchivedProductAction } from "@/app/actions/admin";
 import { brands } from "@/infrastructure/db/schema";
+import { can } from "@/domains/authorization";
 import { PageHead, Table, Badge, statusTone, A, when } from "@/components/admin/ui";
 import { formatMoney } from "@/lib/money";
 
@@ -25,9 +26,9 @@ export default async function ProductHistory() {
           brandNames.get(p.brandId) ?? "Unknown brand",
           formatMoney(p.basePrice, p.currency),
           when(p.archivedAt ?? p.updatedAt),
-          <form key={p.id} action={restoreArchivedProductAction.bind(null, p.id)}>
+          can(actor, "catalog.product.write", p.brandId) ? <form key={p.id} action={restoreArchivedProductAction.bind(null, p.id)}>
             <button type="submit" className="rounded border border-line px-3 py-2 text-xs hover:bg-surface">Restore as draft</button>
-          </form>,
+          </form> : "Read only",
         ])}
         empty="No archived products in your brand scope."
       />
