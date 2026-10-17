@@ -7,7 +7,7 @@ import { isAppError } from "@/lib/errors";
 import { PageHead, Panel, Table, Badge, statusTone, when } from "@/components/admin/ui";
 import { ActionForm } from "@/components/ui/action-form";
 import { Button } from "@/components/ui/button";
-import { createShipmentAction, updateBrandFulfilmentAction, updateOrderStatusAction } from "@/app/actions/admin";
+import { createBrandShipmentAction, updateBrandFulfilmentAction, updateOrderStatusAction } from "@/app/actions/admin";
 import { brands } from "@/infrastructure/db/schema";
 import { formatMoney } from "@/lib/money";
 
@@ -37,13 +37,13 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-medium">{brandNames.get(f.brandId) ?? "Brand"} · {f.method === "pickup" ? "Customer pickup" : "Delivery"}</h3><Badge tone={f.status === "delivered" ? "ok" : f.status === "cancelled" ? "warn" : ""}>{f.status.replace(/_/g, " ")}</Badge></div>
           {pickup && <p className="mt-2 text-sm text-muted">{[pickup.name, pickup.addressLine1, pickup.addressLine2, pickup.city, pickup.state, pickup.postalCode].filter(Boolean).join(", ")}{pickup.instructions ? ` · ${pickup.instructions}` : ""}</p>}
           {f.method === "delivery" && (f.trackingNumber || f.trackingUrl) && <p className="mt-2 text-sm text-muted">Tracking: {f.trackingNumber ?? "—"} {f.trackingUrl ? <a className="underline" href={f.trackingUrl} target="_blank" rel="noopener noreferrer">Track shipment</a> : null}</p>}
+          {f.method === "delivery" && o.paymentStatus === "paid" && can(actor, "orders.manage", f.brandId) && !shipments.some((shipment) => shipment.brandId === f.brandId && shipment.status !== "failed") && <div className="mt-3 max-w-sm"><ActionForm action={createBrandShipmentAction} submitLabel={`Create ${brandNames.get(f.brandId) ?? "brand"} shipment`} hidden={{ orderId: o.id, brandId: f.brandId }} fields={[]} /></div>}
           {options.length > 0 && <div className="mt-3 max-w-sm"><ActionForm action={updateBrandFulfilmentAction} submitLabel="Update fulfilment" hidden={{ fulfilmentId: f.id }} fields={[{ name: "status", label: "Next status", type: "select", options }]} /></div>}
         </div>;
       })}
     </Panel>}
     {manage && <Panel title="Fulfilment">
-      {shipments.length === 0 ? (fulfillments.some((f) => f.method === "pickup") ? <p className="text-sm text-muted">This is a pickup order. Use the Brand fulfilment panel to mark it ready for pickup and confirm collection.</p> : o.paymentStatus === "paid" ? <form action={createShipmentAction.bind(null, o.id)}><Button>Create shipment</Button></form> : <p className="text-sm text-muted">Shipment can be created once the order is paid.</p>)
-        : <Table head={["Carrier", "Status", "Tracking"]} rows={shipments.map((s) => [s.carrier, s.status.replace(/_/g, " "), s.trackingNumber ?? "—"])} />}
+      {fulfillments.some((f) => f.method === "pickup") ? <p className="text-sm text-muted">This is a pickup order. Use the Brand fulfilment panel to prepare the order and confirm collection.</p> : shipments.length > 0 ? <Table head={["Brand", "Carrier", "Status", "Tracking"]} rows={shipments.map((s) => [s.brandId ? brandNames.get(s.brandId) ?? "Brand" : "Order-level shipment", s.carrier, s.status.replace(/_/g, " "), s.trackingNumber ?? "—"])} /> : <p className="text-sm text-muted">Create a separate parcel from each brand's row in the Brand fulfilment panel after payment is confirmed.</p>}
       <div className="mt-6 max-w-md"><ActionForm action={updateOrderStatusAction} submitLabel="Update status" hidden={{ orderId: o.id }} fields={[{ name: "status", label: "Move to", type: "select", options: [["processing", "Processing"], ["shipped", "Shipped"], ["delivered", "Delivered"], ["cancelled", "Cancelled"], ["refunded", "Refunded"]] }, { name: "note", label: "Note", required: false }]} /></div></Panel>}
     <Panel title="Timeline"><Table head={["When", "Change", "Note"]} rows={history.map((h) => [when(h.createdAt), `${h.fromStatus ?? "—"} → ${h.toStatus}`, h.note ?? ""])} /></Panel></div>);
 }
