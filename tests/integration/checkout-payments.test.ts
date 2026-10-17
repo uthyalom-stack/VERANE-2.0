@@ -180,6 +180,41 @@ describe("pickup checkout", () => {
     expect(fulfilments.every((row) => row.method === "delivery" && row.status === "unfulfilled")).toBe(true);
   });
 
+  it("supports mixed per-brand delivery and pickup with separately priced fulfilments", async () => {
+    const { id: uthyProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Mixed Pickup Jacket", basePrice: 1_250_000, status: "published", variants: [{ sku: "MIXED-PICKUP-A", size: "M", initialStock: 2 }] });
+    const { id: aloProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.alo.id, name: "Mixed Delivery Footie", basePrice: 950_000, status: "published", variants: [{ sku: "MIXED-DELIVERY-B", size: "42", initialStock: 2 }] });
+    const [variantA] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, uthyProductId));
+    const [variantB] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, aloProductId));
+    const [location] = await ctx.db.insert(pickupLocations).values({
+      id: crypto.randomUUID(), brandId: a.uthy.id, name: "Uthy Studio", addressLine1: "14 Marina Road", city: "Lagos", state: "Lagos", country: "NG", isActive: true,
+    }).returning();
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variantA!.id, 1);
+    await addToCart(ctx.db, cart.id, variantB!.id, 1);
+
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "mixed-fulfilment@example.com", phone: "08012345678", address,
+      shipping: {
+        id: "per-brand", name: "Brand-specific fulfilment", amountMinor: 250000,
+        meta: {
+          method: "per_brand",
+          brandSelections: [
+            { brandId: a.uthy.id, method: "pickup", id: `pickup:${location!.id}`, name: "Pickup — Uthy Studio", amountMinor: 0, pickupLocationId: location!.id },
+            { brandId: a.alo.id, method: "delivery", id: "mock-standard", name: "MockCarrier — Standard", amountMinor: 250000 },
+          ],
+        },
+      },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+
+    const fulfilments = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilments).toHaveLength(2);
+    expect(fulfilments.find((row) => row.brandId === a.uthy.id)).toMatchObject({ method: "pickup", pickupLocationId: location!.id });
+    expect(fulfilments.find((row) => row.brandId === a.alo.id)).toMatchObject({ method: "delivery", pickupLocationId: null });
+    const [savedOrder] = await ctx.db.select().from(orders).where(eq(orders.id, order.orderId));
+    expect(savedOrder!.shippingTotal).toBe(250000);
+  });
+
   it("rejects a pickup location that belongs to a different brand", async () => {
     const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Sandal", basePrice: 650000, status: "published", variants: [{ sku: "PICK-2", size: "40", initialStock: 2 }] });
     const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
