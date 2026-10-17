@@ -12,7 +12,7 @@ const backoffMs = (attempt: number) => Math.min(60 * 60_000, 30_000 * 2 ** attem
  * Sends pending transactional emails. Safe to run concurrently/repeatedly: a row is claimed by flipping nextAttemptAt
  * forward with a conditional update, and the (dedupeKey) unique constraint prevents duplicate rows from webhook retries.
  */
-export async function processEmailOutbox(db: Db, provider: EmailProvider, cfg: { appUrl: string; adminEmail?: string | undefined }, now = new Date(), limit = 25) {
+export async function processEmailOutbox(db: Db, provider: EmailProvider, cfg: { appUrl: string; adminEmail?: string | undefined; siteName?: string }, now = new Date(), limit = 25) {
   const due = await db.select().from(emailOutbox)
     .where(and(eq(emailOutbox.status, "pending"), or(isNull(emailOutbox.nextAttemptAt), lte(emailOutbox.nextAttemptAt, now)))).limit(limit);
   let sent = 0, failed = 0;
@@ -27,14 +27,14 @@ export async function processEmailOutbox(db: Db, provider: EmailProvider, cfg: {
       let msg;
       if (row.template === "back_in_stock") {
         if (!p.productName || !p.productSlug || !p.brandSlug) throw new Error("back-in-stock payload incomplete");
-        msg = templates.backInStock(to, { productName: p.productName, url: `${cfg.appUrl}/product/${p.productSlug}?brand=${p.brandSlug}` });
+        msg = templates.backInStock(to, { productName: p.productName, url: `${cfg.appUrl}/product/${p.productSlug}?brand=${p.brandSlug}` }, cfg.siteName ?? "Store");
       } else {
         const b = p.orderId ? await loadOrderBundle(db, p.orderId) : null;
         if (!b) throw new Error("order missing");
         const url = `${cfg.appUrl}/orders/${b.order.orderNumber}`;
-        msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: `${i.productName}${i.isPreOrder ? ` (Pre-order${i.fulfillmentTimeSnapshot ? ` — ${i.fulfillmentTimeSnapshot}` : ""})` : ""}`, qty: i.quantity, line: i.lineTotal })), url })
-          : row.template === "admin_new_order" ? templates.adminNewOrder(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, url: `${cfg.appUrl}/admin/orders/${b.order.id}` })
-          : row.template === "shipping_update" ? templates.shippingUpdate(to, { orderNumber: b.order.orderNumber, status: p.shipmentStatus ?? "updated", trackingUrl: p.trackingUrl ?? null, url })
+        msg = row.template === "order_confirmation" ? templates.orderConfirmation(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, items: b.items.map((i) => ({ name: `${i.productName}${i.isPreOrder ? ` (Pre-order${i.fulfillmentTimeSnapshot ? ` — ${i.fulfillmentTimeSnapshot}` : ""})` : ""}`, qty: i.quantity, line: i.lineTotal })), url }, cfg.siteName ?? "Store")
+          : row.template === "admin_new_order" ? templates.adminNewOrder(to, { orderNumber: b.order.orderNumber, total: b.order.total, currency: b.order.currency, url: `${cfg.appUrl}/admin/orders/${b.order.id}` }, cfg.siteName ?? "Store")
+          : row.template === "shipping_update" ? templates.shippingUpdate(to, { orderNumber: b.order.orderNumber, status: p.shipmentStatus ?? "updated", trackingUrl: p.trackingUrl ?? null, url }, cfg.siteName ?? "Store")
           : null;
       }
       if (!msg) throw new Error(`unknown template ${row.template}`);
