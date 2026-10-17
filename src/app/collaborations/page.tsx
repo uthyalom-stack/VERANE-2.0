@@ -4,11 +4,13 @@ import { getDb } from "@/infrastructure/db/client";
 import { publiclyVisible } from "@/domains/catalog/public";
 import { collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, brands, mediaAssets, productVariants, products } from "@/infrastructure/db/schema";
 import { Media } from "@/components/ui/media";
+import { getSiteConfig } from "@/domains/site-content";
 
 export const dynamic = "force-dynamic";
 
 export default async function CollaborationsPage() {
   const db = getDb();
+  const siteConfig = await getSiteConfig(db);
   const now = new Date();
   const rows = await db.select().from(collaborations).where(or(
     eq(collaborations.status, "published"),
@@ -53,7 +55,7 @@ export default async function CollaborationsPage() {
   return <main className="mx-auto max-w-7xl px-5 pb-24 pt-28 md:px-10">
     <p className="house-kicker">Across the house</p>
     <h1 className="display mt-4 text-6xl md:text-8xl">Collaborations.</h1>
-    <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">A meeting of perspectives from across the VÉRANE house.</p>
+    <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">A meeting of perspectives from across the {siteConfig.settings.siteName} house.</p>
     {visible.length ? <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">{visible.map(({ collab, from, to, validProducts, cover }) => {
       const first = validProducts[0]!;
       return <article key={collab.id} className="overflow-hidden rounded-[var(--r-md)] border border-line">

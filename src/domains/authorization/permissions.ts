@@ -30,8 +30,8 @@ const BRAND_ADMIN: PermissionCode[] = [
 
 export const ROLE_DEFINITIONS: Record<string, { name: string; description: string; permissions: PermissionCode[]; brandScoped: boolean }> = {
   SUPER_ADMIN: { name: "Super admin", description: "Global access", permissions: Object.keys(PERMISSIONS) as PermissionCode[], brandScoped: false },
-  UTHY_ADMIN: { name: "UTHY LUXURY admin", description: "UTHY LUXURY scope only", permissions: BRAND_ADMIN, brandScoped: true },
-  ALOMZIEE_ADMIN: { name: "ALOMZIEE FOOTIES admin", description: "ALOMZIEE FOOTIES scope only", permissions: BRAND_ADMIN, brandScoped: true },
+  UTHY_ADMIN: { name: "Brand administrator A", description: "Restricted to the assigned brand", permissions: BRAND_ADMIN, brandScoped: true },
+  ALOMZIEE_ADMIN: { name: "Brand administrator B", description: "Restricted to the assigned brand", permissions: BRAND_ADMIN, brandScoped: true },
 };
 /** Which brand code each brand-scoped role is allowed to be bound to. */
 export const ROLE_BRAND_CODE: Record<string, string> = { UTHY_ADMIN: "UTHY_LUXURY", ALOMZIEE_ADMIN: "ALOMZIEE_FOOTIES" };

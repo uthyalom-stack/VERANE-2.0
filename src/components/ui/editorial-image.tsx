@@ -1,35 +1,22 @@
 import { cn } from "@/lib/cn";
+import { getDb } from "@/lib/server";
+import { getSiteConfig } from "@/domains/site-content";
 
-/**
- * Temporary, commercially reusable editorial direction imagery from Unsplash.
- * Replace these with VÉRANE-owned campaign assets before the final production launch.
- * Sources and license notes live in docs/EDITORIAL_ASSETS.md.
- */
-export const HOUSE_EDITORIAL_IMAGES = {
-  uthy: "https://images.unsplash.com/photo-1776273920158-510b171e936f?auto=format&fit=crop&fm=jpg&q=78&w=1600",
-  alomzie: "https://images.unsplash.com/photo-1777899051916-067557782b78?auto=format&fit=crop&fm=jpg&q=82&w=1800",
-} as const;
-
-export function EditorialImage({
-  brand,
+/** The hero artwork is selected in Admin → Site content & settings from the Media library. */
+export async function EditorialImage({
+  brandSlug,
   alt,
   className,
   priority = false,
 }: {
-  brand: "uthy" | "alomzie";
+  brandSlug: string;
   alt: string;
   className?: string;
   priority?: boolean;
 }) {
+  const config = await getSiteConfig(getDb());
+  const src = config.heroImageUrls[brandSlug];
+  if (!src) return <div role="img" aria-label={alt} data-editorial-placeholder={brandSlug} className={cn("h-full w-full bg-gradient-to-br from-neutral-900 via-neutral-700 to-neutral-950", className)} />;
   // eslint-disable-next-line @next/next/no-img-element
-  return (
-    <img
-      src={HOUSE_EDITORIAL_IMAGES[brand]}
-      alt={alt}
-      loading={priority ? "eager" : "lazy"}
-      decoding="async"
-      fetchPriority={priority ? "high" : "auto"}
-      className={cn("h-full w-full object-cover", className)}
-    />
-  );
+  return <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" fetchPriority={priority ? "high" : "auto"} className={cn("h-full w-full object-cover", className)} />;
 }

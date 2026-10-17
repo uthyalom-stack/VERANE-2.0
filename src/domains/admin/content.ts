@@ -87,7 +87,7 @@ export async function getOrCreateHome(db: Db, actor: Actor) {
   assertCan(actor, "content.write", null); // the house homepage is a global resource
   const [p] = await db.select().from(pages).where(and(eq(pages.kind, "home"), isNull(pages.brandId)));
   if (p) return p;
-  return (await db.insert(pages).values({ kind: "home", slug: "", title: "VÉRANE", status: "draft" }).returning())[0]!;
+  return (await db.insert(pages).values({ kind: "home", slug: "", title: "Home", status: "draft" }).returning())[0]!;
 }
 export async function getOrCreateBrandLanding(db: Db, actor: Actor, brandId: string) {
   assertCan(actor, "content.write", brandId);

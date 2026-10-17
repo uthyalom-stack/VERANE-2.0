@@ -9,23 +9,24 @@ import { mediaUrl } from "@/infrastructure/storage";
 import { HeroVideo } from "./hero-video";
 import type { Db } from "@/infrastructure/db/client";
 import { NewsletterSignup } from "./newsletter";
+import { getSiteConfig } from "@/domains/site-content";
 
 type Block = { id: string; type: string; data: Record<string, unknown> };
 const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
 
 /** Block registry: the CMS stores `type` + `data`; unknown types are skipped, never crash the page. */
 export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Block[]; brandSlug?: string }) {
-  const brands = await listBrands(db);
+  const [brands, siteConfig] = await Promise.all([listBrands(db), getSiteConfig(db)]);
   return (
     <>
       {await Promise.all(blocks.map(async (b) => {
         switch (b.type) {
           case "campaign_hero": return brandSlug ? null : <CampaignHero key={b.id} db={db} data={b.data} />;
-          case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} />;
-          case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} />;
+          case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} siteName={siteConfig.settings.siteName} />;
+          case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} siteName={siteConfig.settings.siteName} />;
           case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "outfit_builder_intro": return <BuilderIntro key={b.id} />;
-          case "newsletter": return <NewsletterSignup key={b.id} />;
+          case "newsletter": return <NewsletterSignup key={b.id} siteName={siteConfig.settings.siteName} />;
           case "collection_feature": return <CollectionFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "look_feature": return <LookFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "editorial_rail": return <EditorialRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
@@ -37,22 +38,18 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
   );
 }
 
-function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>> }) {
-  const copy: Record<string, { index: string; mood: string; action: string }> = {
-    uthy: { index: "01", mood: "Quiet confidence. Considered form.", action: "Enter the house" },
-    alomzie: { index: "02", mood: "Make the entrance yours.", action: "Explore the collection" },
-  };
+function SplitHero({ data, brands, siteName }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>>; siteName: string }) {
   return (
-    <section aria-label="The VÉRANE fashion house" className="house-hero relative">
+    <section aria-label={`${siteName} fashion house`} className="house-hero relative">
       <div className="split-hero">
-        {brands.map((b) => {
-          const editorial = copy[b.themeKey] ?? copy.uthy!;
+        {brands.map((b, i) => {
+          const editorial = { index: String(i + 1).padStart(2, "0"), mood: b.description || "Discover the collection.", action: "Explore the collection" };
           return (
             <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="house-panel group">
-              <EditorialImage brand={b.themeKey === "alomzie" ? "alomzie" : "uthy"} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
+              <EditorialImage brandSlug={b.slug} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
               <div aria-hidden="true" className="house-panel__shade absolute inset-0" />
               <div className="house-panel__meta absolute inset-x-6 top-24 z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-white/75 md:inset-x-10 md:top-28">
-                <span>VÉRANE / {editorial.index}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span>
+                <span>{siteName} / {editorial.index}</span><span>{b.tagline || "Explore the collection"}</span>
               </div>
               <div className="house-panel__copy relative z-10 flex h-full min-h-[50svh] flex-col justify-end p-6 pb-10 md:p-10 md:pb-14">
                 <p className="mb-4 text-xs uppercase tracking-[0.2em] text-white/75">{editorial.mood}</p>
@@ -83,7 +80,7 @@ function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Aw
     </section>
   );
 }
-function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>> }) {
+function BrandIntro({ brands, siteName }: { brands: Awaited<ReturnType<typeof listBrands>>; siteName: string }) {
   return (
     <section className="house-brand-intro mx-auto mt-28 max-w-[1600px] px-5 md:px-10">
       <div className="mb-10 flex flex-col gap-4 md:mb-14 md:flex-row md:items-end md:justify-between">
@@ -94,7 +91,7 @@ function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>>
         {brands.map((b, i) => (
           <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className={`house-brand-card group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[var(--r-lg)] border border-white/10 p-6 md:min-h-[30rem] md:p-10 ${i % 2 ? "md:mt-12" : ""}`}>
             <span className="house-brand-card__orb" aria-hidden="true" />
-            <div className="relative z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] opacity-70"><span>VÉRANE / 0{i + 1}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span></div>
+            <div className="relative z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] opacity-70"><span>{siteName} / 0{i + 1}</span><span>{b.tagline || "Discover the collection"}</span></div>
             <div className="relative z-10">
               <h3 className="display max-w-[10ch] text-5xl md:text-7xl">{b.name}</h3>
               <p className="mt-4 max-w-md text-sm leading-relaxed opacity-75">{b.description}</p>

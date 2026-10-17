@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/server";
+import { brands } from "@/infrastructure/db/schema";
+import { getSiteConfig } from "@/domains/site-content";
 import { listAvailableFacets, listShopProducts, toCardData } from "@/domains/catalog/public";
 import { ProductCard } from "@/components/commerce/product-card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -21,7 +24,7 @@ const flat = (sp: SP): Record<string, string> => {
 export default async function ShopPage({ searchParams }: { searchParams: Promise<SP> }) {
   const sp = flat(await searchParams);
   const db = getDb();
-  const [{ items, hasMore, query }, facets] = await Promise.all([listShopProducts(db, sp), listAvailableFacets(db)]);
+  const [{ items, hasMore, query }, facets, brandRows, siteConfig] = await Promise.all([listShopProducts(db, sp), listAvailableFacets(db), db.select({ slug: brands.slug, name: brands.name }).from(brands).where(eq(brands.isActive, true)), getSiteConfig(db)]);
   const cards = await toCardData(db, items);
   const href = (patch: Record<string, string | undefined>) => {
     const u = new URLSearchParams();
@@ -35,7 +38,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     return queryString ? `/shop?${queryString}` : "/shop";
   };
   const pretty = (v: string) => {
-    const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock", true: "Yes" };
+    const labels: Record<string, string> = { ...Object.fromEntries(brandRows.map((b) => [b.slug, b.name])), in_stock: "In stock", true: "Yes" };
     return labels[v] ?? v.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
   const priceRanges = [
@@ -79,12 +82,12 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     <div className="mx-auto max-w-[1600px] px-5 pb-16 pt-28 md:px-10">
       <div className="house-shop-intro relative overflow-hidden rounded-[var(--r-lg)] border border-line px-6 py-10 md:px-10 md:py-14">
         <div className="house-shop-intro__glow" aria-hidden="true" />
-        <p className="house-kicker relative">The VÉRANE edit / Shop all</p>
+        <p className="house-kicker relative">{siteConfig.settings.siteName} edit / Shop all</p>
         <div className="relative mt-5 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
           <h1 className="display max-w-[9ch] text-6xl md:text-8xl">Find your next statement.</h1>
-          <p className="max-w-sm text-sm leading-relaxed text-muted">Considered essentials from UTHY LUXURY. Expressive pieces from ALOMZIEE FOOTIES. Make them yours.</p>
+          <p className="max-w-sm text-sm leading-relaxed text-muted">Discover the latest pieces, styles and considered essentials from the catalogue.</p>
         </div>
-        <div className="glass relative mt-8 inline-flex items-center gap-3 rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em]"><span className="size-1.5 rounded-full bg-accent" /> Two brands. One expression.</div>
+        <div className="glass relative mt-8 inline-flex items-center gap-3 rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.18em]"><span className="size-1.5 rounded-full bg-accent" /> {siteConfig.settings.tagline}</div>
       </div>
       <div className="mt-10 grid gap-8 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr] lg:gap-12">
         <aside aria-label="Filters" className="house-shop-filters md:sticky md:top-24 md:self-start">
@@ -95,7 +98,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             </summary>
             <div className="mt-5">
               {activeFilterKeys.length > 0 && <Link href="/shop" className="mb-5 inline-flex min-h-10 items-center text-xs underline underline-offset-4">Clear all filters</Link>}
-              {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+              {group("Brand", "brand", brandRows.map((brand) => brand.slug))}
               {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
               {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
               {priceFilter}
@@ -106,7 +109,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
           </details>
           <div className="hidden md:block">
             <div className="mb-5 flex items-center justify-between"><p className="house-kicker">Refine the edit</p>{activeFilterKeys.length > 0 && <Link href="/shop" className="text-xs text-muted underline underline-offset-4">Clear all</Link>}</div>
-            {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
+            {group("Brand", "brand", brandRows.map((brand) => brand.slug))}
             {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
             {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
             {priceFilter}

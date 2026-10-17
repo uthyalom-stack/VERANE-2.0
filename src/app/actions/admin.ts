@@ -219,7 +219,7 @@ export async function reviewCollaborationRequestAction(_: ActionState, f: FormDa
         collaborationId = newCollaborationId;
         await tx.insert(collaborations).values({
           id: newCollaborationId, brandId: request.toBrandId, slug: "collaboration-" + request.id,
-          partnerName: from?.name ?? "VÉRANE partner", title: request.title, status: "draft",
+          partnerName: from?.name ?? "Store partner", title: request.title, status: "draft",
         });
       }
       await tx.update(collaborationRequests).set({ status, reviewedBy: actor.userId, reviewedAt: new Date(), collaborationId, updatedAt: new Date() }).where(eq(collaborationRequests.id, request.id));

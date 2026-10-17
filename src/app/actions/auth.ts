@@ -15,6 +15,7 @@ import { clearGuestCartCookie, guestCartHash } from "@/lib/http/cart-cookie";
 import { fd, run, type ActionState } from "@/lib/http/action";
 import { eq } from "drizzle-orm";
 import { users } from "@/infrastructure/db/schema";
+import { getSiteConfig } from "@/domains/site-content";
 
 const pepper = () => getEnv().TOKEN_PEPPER;
 import { headers } from "next/headers";
@@ -37,7 +38,8 @@ export async function registerAction(_: ActionState, form: FormData): Promise<Ac
       if (err instanceof AppError && err.code === "CONFLICT") return { ok: true, message: "Check your inbox to verify your email, then sign in." };
       throw err;
     }
-    await getEmailProvider().send(templates.verifyEmail(String(raw.email).trim().toLowerCase(), `${e.APP_URL}/verify-email?token=${token}`)).catch((err) => console.error("[email] verify failed", err));
+    const siteConfig = await getSiteConfig(db);
+    await getEmailProvider().send(templates.verifyEmail(String(raw.email).trim().toLowerCase(), `${e.APP_URL}/verify-email?token=${token}`, siteConfig.settings.siteName)).catch((err) => console.error("[email] verify failed", err));
     const s = await login(db, { email: raw.email, password: raw.password }, pepper(), { ip: await clientIp(), userAgent: await ua() }, "customer");
     await setSessionCookie(s.token, s.expiresAt);
     redirect(safeNext(raw.next, "/account"));
@@ -78,7 +80,7 @@ export async function forgotPasswordAction(_: ActionState, form: FormData): Prom
     await limit("forgot", 5, 60 * 60_000);
     const email = z.string().email().parse(fd(form).email);
     const r = await requestPasswordReset(getDb(), email, pepper());
-    if (r) await getEmailProvider().send(templates.passwordReset(email.trim().toLowerCase(), `${getEnv().APP_URL}/reset-password?token=${r.token}`)).catch((e) => console.error("[email] reset failed", e));
+    if (r) { const siteConfig = await getSiteConfig(getDb()); await getEmailProvider().send(templates.passwordReset(email.trim().toLowerCase(), `${getEnv().APP_URL}/reset-password?token=${r.token}`, siteConfig.settings.siteName)).catch((e) => console.error("[email] reset failed", e)); }
     return { ok: true, message: "If an account exists for that email, a reset link is on its way." };
   });
 }
