@@ -5,13 +5,15 @@ import { dollars } from "@/lib/admin";
 import type { products } from "@/infrastructure/db/schema";
 
 type P = typeof products.$inferSelect;
-export function ProductForm({ brands, categories, selectedCategoryIds, product }: { brands: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }>; selectedCategoryIds: string[]; product?: P }) {
+export function ProductForm({ brands, categories, selectedCategoryIds, product }: { brands: Array<{ id: string; name: string }>; categories: Array<{ id: string; name: string }>; selectedCategoryIds: string[]; mediaOptions?: Array<[string, string]>; product?: P }) {
   const t = (name: string, label: string, v?: string | null, o: Partial<FieldDef> = {}): FieldDef => ({ name, label, defaultValue: v ?? "", required: false, ...o });
+  const mediaOptions = arguments[0]?.mediaOptions ?? [];
   const fields: FieldDef[] = [
     { name: "brandId", label: "Brand", type: "select", options: brands.map((b) => [b.id, b.name]), defaultValue: product?.brandId },
     t("name", "Name", product?.name, { required: true }), t("slug", "Slug (auto from name if empty)", product?.slug, { hint: "Changing a slug creates a redirect from the old URL." }), t("subtitle", "Subtitle", product?.subtitle),
     t("description", "Description", product?.description, { type: "textarea" }), t("materials", "Materials", product?.materials, { type: "textarea", rows: 2 }), t("fit", "Fit", product?.fit, { type: "textarea", rows: 2 }),
     t("sizingInfo", "Sizing information", product?.sizingInfo, { type: "textarea", rows: 2 }),
+    { name: "sizeGuideMediaId", label: "Size guide image", type: "select", options: [["", "— none —"], ...mediaOptions], defaultValue: product?.sizeGuideMediaId ?? "" },
     { name: "customSizingEnabled", label: "Offer custom measurements", type: "checkbox", required: false, defaultValue: product?.customSizingEnabled ? "on" : "" },
     { name: "preOrderEnabled", label: "Allow pre-orders", type: "checkbox", required: false, defaultValue: product?.preOrderEnabled ? "on" : "" },
     t("fulfillmentTime", "Pre-order / production lead time", product?.fulfillmentTime, { hint: "Shown as an expected lead time when pre-orders are enabled." }),
