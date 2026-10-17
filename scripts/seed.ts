@@ -79,7 +79,7 @@ for (const p of sample) {
 const [home] = await db.insert(s.pages).values({ kind: "home", slug: "", title: "VÉRANE", status: "published" }).onConflictDoNothing().returning();
 if (home) {
   const blocks = [
-    { type: "hero", data: { title: "Two Brands. One Expression.", subtitle: "SAMPLE campaign — replace via admin", ctaLabel: "Shop the house", ctaHref: "/shop", mediaKey: "placeholders/uthy-hero.svg" } },
+    { type: "hero", data: { title: "Two Brands. One Expression.", subtitle: "Two distinct creative worlds. One considered point of view.", ctaLabel: "Discover the house", ctaHref: "/shop", mediaKey: "placeholders/uthy-hero.svg" } },
     { type: "brand_intro", data: { brandSlugs: ["uthy-luxury", "alomziee-footies"] } },
     { type: "product_rail", data: { title: "New arrivals", source: "newest", limit: 8 } },
     { type: "outfit_builder_intro", data: {} },
