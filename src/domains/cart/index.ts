@@ -53,8 +53,12 @@ export async function addToCart(db: Db, cartId: string, variantId: string, quant
 export async function setCartQuantity(db: Db, cartId: string, variantId: string, quantity: number) {
   if (!Number.isInteger(quantity) || quantity < 0 || quantity > 99) throw new AppError("VALIDATION", "Invalid quantity");
   if (quantity > 0) {
-    const [l] = await db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variantId));
-    if (!l || (!l.allowBackorder && quantity > l.onHand - l.reserved)) throw new AppError("OUT_OF_STOCK", "Not enough stock for that quantity");
+    const [row] = await db.select({ l: inventoryLevels, p: products }).from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId)).leftJoin(inventoryLevels, eq(inventoryLevels.variantId, productVariants.id))
+      .where(eq(productVariants.id, variantId));
+    const available = row?.l ? row.l.onHand - row.l.reserved : 0;
+    const preorder = !!row?.p.preOrderEnabled && available <= 0 && !row?.l?.allowBackorder;
+    if (!row || (!row.l?.allowBackorder && !preorder && quantity > available)) throw new AppError("OUT_OF_STOCK", "Not enough stock for that quantity");
   }
   await upsertQty(db, cartId, variantId, quantity, "set");
 }
@@ -69,7 +73,7 @@ export async function applyDiscountCode(db: Db, cartId: string, code: string | n
 
 export type CartLineView = {
   variantId: string; productId: string; brandId: string; brandName: string; name: string; sku: string; imageKey: string | null; size: string | null; colorName: string | null;
-  unitPrice: number; quantity: number; lineTotal: number; available: number; purchasable: boolean; issue: string | null; isPreOrder: boolean; customMeasurements: Record<string, number> | null;
+  unitPrice: number; quantity: number; lineTotal: number; available: number; purchasable: boolean; issue: string | null; isPreOrder: boolean; fulfillmentTime: string | null; customMeasurements: Record<string, number> | null;
 };
 export type CartView = { cartId: string; currency: string; lines: CartLineView[]; pricing: PricingResult; discountError: string | null; canCheckout: boolean };
 
@@ -91,7 +95,7 @@ export async function getCartView(db: Db, cartId: string, opts: { shippingTotal?
     const unitPrice = effectiveUnitPrice(r.p.basePrice, r.v.priceOverride);
     const isPreOrder = r.p.preOrderEnabled && available <= 0 && !r.l?.allowBackorder;
     const issue = !visible || !r.v.isActive ? "No longer available" : r.p.customSizingEnabled && !i.customMeasurements ? "Custom measurements are required; remove and re-add this item" : !r.l?.allowBackorder && !isPreOrder && available < i.quantity ? (available > 0 ? `Only ${available} left` : "Sold out") : null;
-    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, imageKey: null, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue, isPreOrder, customMeasurements: i.customMeasurements }];
+    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, imageKey: null, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue, isPreOrder, fulfillmentTime: r.p.fulfillmentTime, customMeasurements: i.customMeasurements }];
   });
   const mediaRows = lines.length ? await db.select({ productId: productMedia.productId, key: mediaAssets.storageKey })
     .from(productMedia).innerJoin(mediaAssets, eq(mediaAssets.id, productMedia.mediaId))
