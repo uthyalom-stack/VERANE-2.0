@@ -2,7 +2,7 @@
  * DEVELOPMENT SEED — sample data only. Every product/campaign here is clearly labelled SAMPLE and uses
  * placeholder media. Refuses to run when APP_ENV=production. Never mixes into production data.
  */
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { createDb } from "../src/infrastructure/db/client";
 import * as s from "../src/infrastructure/db/schema";
 import { reconcileRbac } from "../src/domains/authorization/seed";
@@ -57,11 +57,11 @@ const ph = ["uthy-hero", "alomzie-hero", "look-1", "look-2", "product-1", "produ
 for (const k of ph) await db.insert(s.mediaAssets).values({ storageKey: `placeholders/${k}.svg`, kind: "image", mimeType: "image/svg+xml", byteSize: 1200, width: 1600, height: 1000, altText: `Placeholder artwork (${k})`, isPlaceholder: true }).onConflictDoNothing();
 
 const sample = [
-  { b: "UTHY_LUXURY", name: "SAMPLE Sculpted Column Dress", price: 18500000, type: "Dress", style: "Evening", occasion: "Event", cat: "dresses", sizes: ["XS", "S", "M", "L"], colors: [["Obsidian", "#121316"]] },
-  { b: "UTHY_LUXURY", name: "SAMPLE Architectural Wool Coat", price: 32000000, type: "Coat", style: "Tailored", occasion: "Work", cat: "outerwear", sizes: ["S", "M", "L"], colors: [["Pewter", "#8C9096"], ["Obsidian", "#121316"]] },
-  { b: "UTHY_LUXURY", name: "SAMPLE Satin Draped Top", price: 9800000, type: "Top", style: "Evening", occasion: "Event", cat: "tops", sizes: ["XS", "S", "M"], colors: [["Champagne", "#B9A27A"]] },
-  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Neon Block Sneaker", price: 7500000, type: "Sneaker", style: "Street", occasion: "Casual", cat: "sneakers", sizes: ["40", "41", "42", "43", "44"], colors: [["Ultramarine", "#2B2BFF"], ["Citrus", "#E4FF3A"]] },
-  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Graphic Platform Heel", price: 6900000, type: "Heel", style: "Statement", occasion: "Party", cat: "heels", sizes: ["37", "38", "39", "40"], colors: [["Lilac", "#C9B8FF"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Sculpted Column Dress", price: 18500000, compareAtPrice: null, type: "Dress", style: "Evening", occasion: "Event", cat: "dresses", sizes: ["XS", "S", "M", "L"], colors: [["Obsidian", "#121316"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Architectural Wool Coat", price: 32000000, compareAtPrice: null, type: "Coat", style: "Tailored", occasion: "Work", cat: "outerwear", sizes: ["S", "M", "L"], colors: [["Pewter", "#8C9096"], ["Obsidian", "#121316"]] },
+  { b: "UTHY_LUXURY", name: "SAMPLE Satin Draped Top", price: 9800000, compareAtPrice: null, type: "Top", style: "Evening", occasion: "Event", cat: "tops", sizes: ["XS", "S", "M"], colors: [["Champagne", "#B9A27A"]] },
+  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Neon Block Sneaker", price: 7500000, compareAtPrice: null, type: "Sneaker", style: "Street", occasion: "Casual", cat: "sneakers", sizes: ["40", "41", "42", "43", "44"], colors: [["Ultramarine", "#2B2BFF"], ["Citrus", "#E4FF3A"]] },
+  { b: "ALOMZIEE_FOOTIES", name: "SAMPLE Graphic Platform Heel", price: 6900000, compareAtPrice: 8900000, type: "Heel", style: "Statement", occasion: "Party", cat: "heels", sizes: ["37", "38", "39", "40"], colors: [["Lilac", "#C9B8FF"]] },
 ];
 for (const p of sample) {
   const variants = p.colors.flatMap(([colorName, colorHex], ci) => p.sizes.map((size, si) => ({
@@ -69,20 +69,29 @@ for (const p of sample) {
     size, colorName, colorHex, isActive: true, sortOrder: ci * 10 + si, initialStock: 8,
   })));
   try {
-    const { id } = await createProduct(db, superActor, { brandId: brand[p.b]!.id, name: p.name, basePrice: p.price, productType: p.type, style: p.style, occasion: p.occasion,
+    const { id } = await createProduct(db, superActor, { brandId: brand[p.b]!.id, name: p.name, basePrice: p.price, compareAtPrice: p.compareAtPrice, productType: p.type, style: p.style, occasion: p.occasion,
       description: "Sample catalog item for development only.", status: "published", isFeatured: true, categoryIds: [cat[p.cat]!], variants });
     await reindexProduct(db, id);
   } catch (e) { if (!String(e).includes("already exists")) throw e; }
+  // Keep the one development sale visible when this seed is rerun against an existing local database.
+  if (p.compareAtPrice !== null) {
+    const [existingSaleProduct] = await db.select({ id: s.products.id }).from(s.products)
+      .where(and(eq(s.products.brandId, brand[p.b]!.id), eq(s.products.name, p.name))).limit(1);
+    if (existingSaleProduct) await db.update(s.products).set({ compareAtPrice: p.compareAtPrice, updatedAt: new Date() }).where(eq(s.products.id, existingSaleProduct.id));
+  }
 }
 
 // Homepage as structured, CMS-editable blocks
 const [home] = await db.insert(s.pages).values({ kind: "home", slug: "", title: "VÉRANE", status: "published" }).onConflictDoNothing().returning();
 if (home) {
   const blocks = [
-    { type: "hero", data: { title: "Two Brands. One Expression.", subtitle: "SAMPLE campaign — replace via admin", ctaLabel: "Shop the house", ctaHref: "/shop", mediaKey: "placeholders/uthy-hero.svg" } },
-    { type: "brand_intro", data: { brandSlugs: ["uthy-luxury", "alomziee-footies"] } },
-    { type: "product_rail", data: { title: "New arrivals", source: "newest", limit: 8 } },
+    { type: "hero", data: { title: "Two Brands. One Expression.", subtitle: "Two distinct creative worlds. One considered point of view.", ctaLabel: "Discover the house", ctaHref: "/shop", mediaKey: "placeholders/uthy-hero.svg" } },
     { type: "outfit_builder_intro", data: {} },
+    { type: "product_rail", data: { title: "New arrivals", source: "newest", limit: 8 } },
+    { type: "product_rail", data: { title: "Trending now", source: "featured", limit: 8 } },
+    { type: "collection_feature", data: { slug: "sample-evening-edit" } },
+    { type: "product_rail", data: { title: "Special price", source: "discounted", limit: 8 } },
+    { type: "brand_intro", data: { brandSlugs: ["uthy-luxury", "alomziee-footies"] } },
     { type: "newsletter", data: {} },
   ];
   for (const [i, b] of blocks.entries()) await db.insert(s.pageBlocks).values({ pageId: home.id, sortOrder: i, type: b.type, data: b.data });
@@ -90,12 +99,22 @@ if (home) {
 // ---- sample editorial/commerce content (clearly SAMPLE) ----
 const media = Object.fromEntries((await db.select().from(s.mediaAssets)).map((m) => [m.storageKey, m.id]));
 const allProducts = await db.select().from(s.products);
+// Attach clearly-labelled development artwork so seeded catalog cards and product pages
+// exercise the complete media path instead of rendering empty image wells.
+for (const p of allProducts.filter((row) => row.name.startsWith("SAMPLE "))) {
+  const [existingMedia] = await db.select().from(s.productMedia).where(eq(s.productMedia.productId, p.id)).limit(1);
+  if (existingMedia) continue;
+  const [brandRow] = await db.select().from(s.brands).where(eq(s.brands.id, p.brandId));
+  const storageKey = brandRow?.themeKey === "uthy" ? "placeholders/product-1.svg" : "placeholders/product-2.svg";
+  const mediaId = media[storageKey];
+  if (mediaId) await db.insert(s.productMedia).values({ productId: p.id, mediaId, role: "primary", sortOrder: 0 });
+}
 const uthyProducts = allProducts.filter((p) => p.brandId === brand.UTHY_LUXURY!.id);
-const [col] = await db.insert(s.collections).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-evening-edit", title: "SAMPLE Evening Edit", description: "Sample collection for development.", heroMediaId: media["placeholders/look-1.svg"], status: "published", isFeatured: true }).onConflictDoNothing().returning();
+const [col] = await db.insert(s.collections).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-evening-edit", title: "SAMPLE Limited Edit", description: "Sample curated collection for development only. Replace with a real limited release before production.", heroMediaId: media["placeholders/look-1.svg"], status: "published", isFeatured: true }).onConflictDoUpdate({ target: s.collections.slug, set: { title: "SAMPLE Limited Edit", description: "Sample curated collection for development only. Replace with a real limited release before production.", heroMediaId: media["placeholders/look-1.svg"], updatedAt: new Date() } }).returning();
 if (col) for (const [i, p] of uthyProducts.entries()) await db.insert(s.collectionProducts).values({ collectionId: col.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
 const [look] = await db.insert(s.looks).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-city-after-dark", title: "SAMPLE City After Dark", description: "Sample look for development.", stylingNotes: "Keep the line long and the accessories quiet.", imageMediaId: media["placeholders/look-1.svg"], status: "published" }).onConflictDoNothing().returning();
 if (look) for (const [i, p] of uthyProducts.entries()) await db.insert(s.lookItems).values({ lookId: look.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
 await db.insert(s.journalArticles).values({ slug: "sample-two-houses", kind: "brand_story", title: "SAMPLE: Two houses, one expression", excerpt: "Sample story for development.", coverMediaId: media["placeholders/look-2.svg"], status: "published", body: [{ type: "paragraph", text: "This is sample editorial copy." }, { type: "heading", text: "Sample heading" }, { type: "paragraph", text: "Replace via the admin journal editor." }] }).onConflictDoNothing();
 await db.insert(s.discounts).values({ code: "WELCOME10", kind: "percent", value: 10, isActive: true }).onConflictDoNothing();
-for (const pg of home ? [home] : []) { await db.insert(s.pageBlocks).values([{ pageId: pg.id, sortOrder: 5, type: "collection_feature", data: { slug: "sample-evening-edit" } }, { pageId: pg.id, sortOrder: 6, type: "look_feature", data: { slug: "sample-city-after-dark" } }, { pageId: pg.id, sortOrder: 7, type: "editorial_rail", data: { title: "From the Journal", limit: 3 } }]); }
+for (const pg of home ? [home] : []) { await db.insert(s.pageBlocks).values([{ pageId: pg.id, sortOrder: 8, type: "look_feature", data: { slug: "sample-city-after-dark" } }, { pageId: pg.id, sortOrder: 9, type: "editorial_rail", data: { title: "From the Journal", limit: 3 } }]); }
 console.log("Seed complete (sample data). Dev admins: super@/uthy@/alomzie@verane.local — password from SEED_ADMIN_PASSWORD.");

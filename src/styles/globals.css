@@ -2,12 +2,12 @@
 
 /* ---- Design tokens (centralised). Brand themes override the semantic layer only. ---- */
 :root {
-  --vr-ink: #0c0c0e; --vr-bone: #f2f0ec;
+  --vr-ink: #0c0c12; --vr-bone: #f3f1f8; --vr-violet: #9b8cff;
   --uthy-basalt: #121316; --uthy-pewter: #8c9096; --uthy-opal: #e6e8ea; --uthy-champagne: #b9a27a;
   --alo-ink: #0b0a1f; --alo-ultra: #2b2bff; --alo-lilac: #c9b8ff; --alo-citrus: #e4ff3a; --alo-paper: #f6f4ff;
 
   --bg: var(--vr-ink); --fg: var(--vr-bone); --muted: color-mix(in oklab, var(--fg) 62%, transparent);
-  --line: color-mix(in oklab, var(--fg) 16%, transparent); --accent: var(--uthy-champagne); --accent-fg: #111;
+  --line: color-mix(in oklab, var(--fg) 16%, transparent); --accent: var(--vr-violet); --accent-fg: #100e20;
   --surface: color-mix(in oklab, var(--fg) 6%, transparent);
   --glass-bg: color-mix(in oklab, var(--bg) 42%, transparent);
   --glass-line: color-mix(in oklab, var(--fg) 22%, transparent);
@@ -51,14 +51,42 @@ p { max-width: 62ch; text-wrap: pretty; }
 }
 @supports not (backdrop-filter: blur(1px)) { .glass { background: color-mix(in oklab, var(--bg) 92%, transparent); } }
 
-/* The one orchestrated moment: a split hero that opens toward the brand you lean into. */
-.split-hero { display: flex; min-height: 100svh; }
-.split-hero > a { flex: 1 1 50%; position: relative; overflow: hidden; transition: flex-grow var(--dur-3) var(--ease); }
+/* The house entrance: two distinct worlds, one editorial frame. */
+.house-hero { isolation: isolate; background: var(--bg); }
+.split-hero { display: flex; min-height: min(100svh, 1100px); }
+.house-panel { flex: 1 1 50%; position: relative; display: block; min-width: 0; min-height: min(100svh, 900px); overflow: hidden; background: #171717; transition: flex-grow var(--dur-3) var(--ease); }
+.house-panel__image { transform: scale(1.015); }
+.house-panel__shade { background: linear-gradient(180deg, rgb(0 0 0 / .36) 0%, rgb(0 0 0 / .04) 35%, rgb(0 0 0 / .12) 54%, rgb(0 0 0 / .78) 100%); transition: opacity var(--dur-3) var(--ease); }
+.house-panel__copy { min-height: min(100svh, 900px); }
+.house-panel__link { transition: gap var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease); }
+.house-panel:focus-visible { outline-offset: -6px; }
+.house-hero__statement { text-shadow: 0 2px 24px rgb(0 0 0 / .25); }
+.house-hero__mobile-statement { border-bottom: 1px solid var(--line); }
 @media (hover: hover) and (min-width: 900px) {
-  .split-hero:has(a:hover) > a { flex-grow: 0.6; }
-  .split-hero > a:hover { flex-grow: 1.8; }
+  .split-hero:has(.house-panel:hover) .house-panel { flex-grow: .78; }
+  .split-hero .house-panel:hover { flex-grow: 1.22; }
+  .house-panel:hover .house-panel__image { opacity: .88; }
+  .house-panel:hover .house-panel__shade { opacity: .92; }
 }
-@media (max-width: 899px) { .split-hero { flex-direction: column; } .split-hero > a { min-height: 50svh; } }
+.house-hero__glass { -webkit-backdrop-filter: blur(24px) saturate(1.45); backdrop-filter: blur(24px) saturate(1.45); box-shadow: 0 24px 90px rgb(0 0 0 / .28), inset 0 1px 0 rgb(255 255 255 / .28); animation: house-glass-in 900ms var(--ease) both; }
+.house-hero__glass::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, rgb(255 255 255 / .10), transparent 42%, rgb(255 255 255 / .035)); pointer-events: none; }
+@keyframes house-glass-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes house-orb-drift { from { translate: -1.5% 0; scale: .96; } to { translate: 2.5% 2%; scale: 1.04; } }
+@keyframes house-glow-breathe { from { transform: translate3d(-2%, 0, 0) scale(.92); opacity: .55; } to { transform: translate3d(2%, 3%, 0) scale(1.08); opacity: .9; } }
+
+@media (prefers-reduced-motion: reduce) { .house-hero__glass { animation: none; } }
+@media (max-width: 899px) {
+  .split-hero { flex-direction: column; min-height: auto; }
+  .house-panel { flex: none; min-height: clamp(25rem, 66svh, 42rem); }
+  .house-panel__copy { min-height: clamp(25rem, 66svh, 42rem); padding-top: 8rem; }
+  .house-panel__meta { top: 6rem; }
+  .house-hero__statement { display: none; }
+}
+@media (max-width: 420px) {
+  .house-panel { min-height: 28rem; }
+  .house-panel__copy { min-height: 28rem; }
+  .house-panel__meta { font-size: 8px; letter-spacing: .12em; }
+}
 
 .rail { display: grid; grid-auto-flow: column; grid-auto-columns: min(78vw, 320px); gap: 1rem; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
 .rail > * { scroll-snap-align: start; }
@@ -71,3 +99,194 @@ p { max-width: 62ch; text-wrap: pretty; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
+
+
+/* Editorial rhythm: give each home section a clear, consistent point of view. */
+.house-kicker { margin: 0; color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: .24em; line-height: 1.5; text-transform: uppercase; }
+.house-text-link { display: inline-flex; align-items: center; gap: .65rem; border-bottom: 1px solid var(--line); padding-bottom: .55rem; transition: color var(--dur-2) var(--ease), gap var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease); }
+.house-text-link:hover { color: var(--accent); border-color: var(--accent); gap: 1rem; }
+
+.house-brand-card { isolation: isolate; background: linear-gradient(145deg, color-mix(in oklab, var(--bg) 88%, var(--accent)), var(--bg) 70%); transition: transform var(--dur-3) var(--ease), border-color var(--dur-2) var(--ease); }
+.house-brand-card::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .8; background: linear-gradient(125deg, rgb(255 255 255 / .07), transparent 34%, transparent 68%, color-mix(in oklab, var(--accent) 11%, transparent)); pointer-events: none; }
+.house-brand-card[data-brand="uthy"] { --bg: #121316; --fg: #e6e8ea; --accent: #b9a27a; color: var(--fg); }
+.house-brand-card[data-brand="alomzie"] { --bg: #0b0a1f; --fg: #f6f4ff; --accent: #e4ff3a; color: var(--fg); }
+.house-brand-card__orb { position: absolute; z-index: -1; top: 12%; right: -10%; width: min(70%, 26rem); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 32% 28%, color-mix(in oklab, var(--accent) 72%, white), color-mix(in oklab, var(--accent) 24%, transparent) 36%, transparent 70%); opacity: .24; filter: blur(2px); transform: translate3d(0,0,0) scale(.92); transition: transform 900ms var(--ease), opacity 600ms var(--ease); animation: house-orb-drift 11s ease-in-out infinite alternate; }
+.house-brand-card[data-brand="uthy"] .house-brand-card__orb { background: radial-gradient(circle at 32% 28%, #fff0d2, #b9a27a 24%, transparent 70%); opacity: .2; }
+.house-brand-card[data-brand="alomzie"] .house-brand-card__orb { background: radial-gradient(circle at 32% 28%, #ffffff, #2b2bff 25%, #c9b8ff 40%, transparent 70%); opacity: .38; }
+.house-brand-card:hover { transform: translateY(-4px); border-color: color-mix(in oklab, var(--accent) 55%, transparent); }
+.house-brand-card:hover .house-brand-card__orb { transform: translate3d(-4%, 4%, 0) scale(1.08); opacity: .55; }
+
+.house-builder { background: linear-gradient(115deg, color-mix(in oklab, var(--bg) 75%, #2727ff 25%), color-mix(in oklab, var(--bg) 92%, var(--accent))); }
+.house-builder__glow { position: absolute; z-index: -1; width: 34rem; max-width: 80vw; aspect-ratio: 1; top: -65%; right: -8%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 34%, #5141ff), transparent 68%); filter: blur(10px); pointer-events: none; animation: house-glow-breathe 8s ease-in-out infinite alternate; }
+.house-builder::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(130deg, rgb(255 255 255 / .07), transparent 38%, rgb(255 255 255 / .025)); pointer-events: none; }
+
+.house-look__image { isolation: isolate; }
+.house-look__image img, .house-look__image picture { transition: transform 900ms var(--ease); }
+.house-look__image:hover img { transform: scale(1.025); }
+.house-look__copy { position: relative; }
+.house-story__media { isolation: isolate; }
+.house-story__media::after { content: ""; position: absolute; inset: 0; border: 1px solid rgb(255 255 255 / .08); border-radius: inherit; pointer-events: none; }
+.house-story__index { color: var(--fg); }
+@media (prefers-reduced-motion: reduce) {
+  .house-brand-card, .house-brand-card__orb, .house-look__image img, .house-text-link { transition: none; }
+}
+
+
+/* Shop discovery: editorial introduction, clear controls, and brand-led atmosphere. */
+.house-shop-intro { isolation: isolate; background: linear-gradient(115deg, color-mix(in oklab, var(--bg) 82%, #2424ff 18%), var(--bg) 68%); }
+.house-shop-intro::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(130deg, rgb(255 255 255 / .065), transparent 42%, rgb(255 255 255 / .02)); pointer-events: none; }
+.house-shop-intro__glow { position: absolute; z-index: -1; width: min(54vw, 34rem); aspect-ratio: 1; top: -70%; right: -5%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 40%, #5141ff), transparent 68%); filter: blur(12px); pointer-events: none; animation: house-glow-breathe 10s ease-in-out infinite alternate-reverse; }
+.house-shop-filters { min-width: 0; }
+.house-filter-chip:hover { border-color: color-mix(in oklab, var(--accent) 65%, transparent); }
+.house-shop-toolbar { min-height: 3.25rem; }
+@media (max-width: 767px) {
+  .house-shop-filters { padding: 1rem; border: 1px solid var(--line); border-radius: var(--r-md); background: color-mix(in oklab, var(--surface) 70%, transparent); }
+  .house-filter-group:last-child { margin-bottom: 0; border-bottom: 0; padding-bottom: 0; }
+}
+
+/* Brand landings should feel like separate campaigns within the same house. */
+.house-brand-hero { isolation: isolate; }
+.house-brand-hero__wash { background: linear-gradient(180deg, rgb(0 0 0 / .15), transparent 22%, rgb(0 0 0 / .18) 50%, var(--bg) 100%); }
+.house-brand-hero--uthy .house-brand-hero__wash { background: linear-gradient(180deg, rgb(8 8 9 / .2), transparent 24%, rgb(8 8 9 / .15) 48%, var(--bg) 100%); }
+.house-brand-hero--alo .house-brand-hero__wash { background: radial-gradient(ellipse at 78% 28%, rgb(43 43 255 / .22), transparent 45%), linear-gradient(180deg, rgb(8 8 25 / .12), transparent 25%, rgb(8 8 25 / .2) 48%, var(--bg) 100%); }
+.house-brand-hero__panel { position: relative; overflow: hidden; background: color-mix(in oklab, var(--bg) 44%, transparent); }
+.house-brand-hero__panel::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(130deg, rgb(255 255 255 / .11), transparent 42%, rgb(255 255 255 / .025)); pointer-events: none; }
+.house-brand-hero--alo .house-brand-hero__panel { border-color: color-mix(in oklab, var(--accent) 28%, transparent); }
+.house-brand-manifesto { border-bottom: 1px solid var(--line); }
+.house-brand-manifesto > div { position: relative; }
+.house-brand-manifesto > div::before { content: ""; position: absolute; top: -1.5rem; left: 0; width: 3rem; height: 1px; background: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .house-shop-intro__glow { filter: none; } }
+
+
+/* Product detail: a quiet purchase panel beside a tactile image gallery. */
+.house-product-layout { align-items: start; }
+.house-product-layout > :first-child > div { border: 1px solid color-mix(in oklab, var(--fg) 7%, transparent); }
+.house-product-layout > :first-child img { transition: transform 800ms var(--ease); }
+.house-product-layout > :first-child button:hover img { transform: scale(1.025); }
+.house-product-panel { padding-top: .25rem; }
+.house-product-details details summary { min-height: 2.5rem; align-items: center; gap: 1rem; }
+.house-product-details details summary::-webkit-details-marker { display: none; }
+.house-product-details details[open] summary { color: var(--accent); }
+.house-product-details details p { max-width: 52ch; line-height: 1.75; }
+@media (max-width: 767px) {
+  .house-product-panel { padding-top: .75rem; }
+  .house-product-layout { gap: 1.75rem; }
+}
+
+
+/* Editorial index pages share one rhythm without flattening each story into a card grid. */
+.house-index-intro { padding-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+.house-index-card { display: block; min-width: 0; }
+.house-index-card__media { isolation: isolate; }
+.house-index-card__media img { transition: transform 900ms var(--ease), filter 600ms var(--ease); }
+.house-index-card:hover .house-index-card__media img { transform: scale(1.035); }
+.house-index-card__media::after { content: ""; position: absolute; inset: 0; border: 1px solid rgb(255 255 255 / .07); border-radius: inherit; pointer-events: none; }
+.house-journal-lead { padding-bottom: 2.5rem; border-bottom: 1px solid var(--line); }
+footer { position: relative; }
+footer::before { content: ""; display: block; height: 1px; width: 100%; background: linear-gradient(90deg, transparent, color-mix(in oklab, var(--accent) 48%, transparent), transparent); }
+footer > div:first-child > div:first-child p:first-child { letter-spacing: .24em; }
+footer nav a { width: fit-content; transition: color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+footer nav a:hover { transform: translateX(3px); }
+
+
+/* Outfit Builder is a hands-on styling studio, not just a form. */
+.house-outfit-intro { background: linear-gradient(115deg, color-mix(in oklab, var(--bg) 80%, #2b2bff 20%), var(--bg) 76%); }
+.house-outfit-intro::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(130deg, rgb(255 255 255 / .06), transparent 48%); pointer-events: none; }
+.house-outfit-catalog, .house-outfit-summary { min-width: 0; }
+.house-outfit-pieces { scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.house-outfit-pieces button { display: block; height: 100%; padding: .5rem; border: 1px solid var(--line); border-radius: var(--r-md); transition: border-color var(--dur-2) var(--ease), background var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+.house-outfit-pieces button:hover { border-color: color-mix(in oklab, var(--accent) 58%, transparent); transform: translateY(-2px); }
+.house-outfit-pieces button[aria-pressed="true"] { border-color: var(--accent); background: color-mix(in oklab, var(--accent) 7%, transparent); }
+.house-outfit-pieces button img { border-radius: calc(var(--r-md) - 3px); }
+.house-outfit-stage { background: radial-gradient(ellipse at 50% 30%, color-mix(in oklab, var(--accent) 11%, transparent), transparent 55%), linear-gradient(145deg, color-mix(in oklab, var(--bg) 88%, #2929ff), var(--surface)); box-shadow: inset 0 1px 0 rgb(255 255 255 / .06); }
+.house-outfit-stage::before { content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .16; background-image: linear-gradient(rgb(255 255 255 / .08) 1px, transparent 1px), linear-gradient(90deg, rgb(255 255 255 / .08) 1px, transparent 1px); background-size: 10% 10%; mask-image: linear-gradient(to bottom, black, transparent 85%); }
+.house-outfit-stage > p { z-index: 1; }
+.house-outfit-summary { padding: 1.25rem; border: 1px solid var(--line); border-radius: var(--r-md); background: color-mix(in oklab, var(--surface) 76%, transparent); }
+.house-outfit-summary select, .house-outfit-summary input:not([type="checkbox"]) { min-width: 0; }
+@media (min-width: 1024px) { .house-outfit-summary { position: sticky; top: 6rem; } }
+@media (max-width: 767px) { .house-outfit-stage-wrap { order: -1; } .house-outfit-stage { max-height: 75svh; } }
+
+
+.house-collection-hero { min-height: min(76svh, 900px); }
+.house-collection-hero__wash { background: linear-gradient(180deg, rgb(0 0 0 / .1), transparent 28%, color-mix(in oklab, var(--bg) 20%, transparent) 58%, var(--bg) 100%); }
+.house-collection-hero__panel { background: color-mix(in oklab, var(--bg) 48%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.35); backdrop-filter: blur(24px) saturate(1.35); }
+.house-collection-hero__panel::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(130deg, rgb(255 255 255 / .08), transparent 42%); pointer-events: none; }
+.house-look-detail__image { isolation: isolate; }
+.house-look-detail__image img { transition: transform 900ms var(--ease); }
+.house-look-detail__image:hover img { transform: scale(1.025); }
+.house-look-detail__copy { min-width: 0; }
+.house-search-form { border-color: var(--glass-line); }
+.house-search-form input { color: var(--fg); }
+.house-search-form:focus-within { border-color: color-mix(in oklab, var(--accent) 50%, transparent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 10%, transparent), inset 0 1px 0 rgb(255 255 255 / .18); }
+
+
+/* The shared header stays quiet over campaign imagery and gains glass as the page moves on. */
+.house-site-header { will-change: background, backdrop-filter; }
+.house-wordmark { position: relative; transition: letter-spacing var(--dur-3) var(--ease), color var(--dur-2) var(--ease); }
+.house-wordmark:hover { letter-spacing: .25em; color: var(--accent); }
+.house-site-header nav a { transition: color var(--dur-2) var(--ease), opacity var(--dur-2) var(--ease); }
+.house-site-header nav a[aria-current="page"] { text-decoration-color: var(--accent); text-underline-offset: .5rem; }
+.house-menu-button { transition: background var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), color var(--dur-2) var(--ease); }
+.house-menu-button:hover { border-color: color-mix(in oklab, var(--accent) 60%, transparent); color: var(--accent); }
+.house-mobile-menu { background: color-mix(in oklab, var(--bg) 90%, transparent); }
+.house-mobile-menu__nav a { width: fit-content; max-width: 100%; transition: color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+.house-mobile-menu__nav a:hover { color: var(--accent); transform: translateX(5px); }
+.house-mobile-menu__nav a[href*="/brands/alomziee"] { color: color-mix(in oklab, var(--fg) 84%, #e4ff3a); }
+@media (prefers-reduced-motion: reduce) { .house-wordmark, .house-site-header nav a, .house-menu-button, .house-mobile-menu__nav a { transition: none; } }
+
+
+/* Keep the bag and checkout visually connected to the same house, with clear conversion hierarchy. */
+.house-cart-summary, .house-checkout-summary { border-color: color-mix(in oklab, var(--fg) 18%, transparent); background: color-mix(in oklab, var(--bg) 72%, transparent); }
+.house-cart-summary form input, .house-checkout-layout input, .house-checkout-layout select { transition: border-color var(--dur-2) var(--ease), box-shadow var(--dur-2) var(--ease); }
+.house-cart-summary form input:focus, .house-checkout-layout input:focus, .house-checkout-layout select:focus { border-color: color-mix(in oklab, var(--accent) 65%, transparent); outline: none; box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 9%, transparent); }
+.house-checkout-section { padding-bottom: 2rem; border-bottom: 1px solid var(--line); }
+.house-checkout-section:last-child { border-bottom: 0; }
+.house-checkout-summary { box-shadow: 0 20px 80px -35px rgb(0 0 0 / .7), inset 0 1px 0 rgb(255 255 255 / .14); }
+.house-checkout-summary > ul li { gap: 1.5rem; }
+.house-checkout-summary > p[role="alert"] { overflow-wrap: anywhere; }
+@media (max-width: 767px) {
+  .house-cart-summary, .house-checkout-summary { border-radius: var(--r-md); }
+  .house-checkout-summary { position: relative; }
+}
+
+
+.product-card__fallback { isolation: isolate; min-height: 100%; background: linear-gradient(145deg, color-mix(in oklab, var(--bg) 72%, var(--accent)), var(--surface) 70%); }
+.product-card__fallback::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(145deg, rgb(255 255 255 / .07), transparent 48%); }
+.product-card[data-brand="uthy"] .product-card__fallback { --accent: #b9a27a; }
+.product-card[data-brand="alomzie"] .product-card__fallback { --accent: #e4ff3a; background: linear-gradient(145deg, #20166a, #0b0a1f 75%); }
+.product-card__fallback-orb { position: absolute; top: 10%; right: -20%; width: 90%; aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 35%, transparent), transparent 70%); filter: blur(6px); opacity: .8; }
+
+
+.house-bag-line__image img, .house-checkout-item__image img { height: 100%; width: 100%; object-fit: cover; }
+.house-bag-line__image { border: 1px solid color-mix(in oklab, var(--fg) 8%, transparent); }
+.house-checkout-item__image { border: 1px solid color-mix(in oklab, var(--fg) 8%, transparent); }
+
+
+/* Quick add: keeps variant choice one tap away without nesting controls inside the product link. */
+.product-card__quick-add-wrap { position: absolute; inset-inline: .75rem; bottom: .75rem; z-index: 15; }
+.product-card__quick-add { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; gap: .6rem; border: 1px solid rgb(255 255 255 / .24); background: rgb(12 12 14 / .72); color: #f2f0ec; -webkit-backdrop-filter: blur(16px) saturate(1.35); backdrop-filter: blur(16px) saturate(1.35); box-shadow: inset 0 1px 0 rgb(255 255 255 / .18), 0 8px 28px rgb(0 0 0 / .2); transition: background var(--dur-2) var(--ease), color var(--dur-2) var(--ease), border-color var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+.product-card__quick-add-wrap > .product-card__quick-add { width: 100%; }
+.product-card__quick-add:hover, .product-card__quick-add:focus-visible { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.product-card__quick-add--disabled { position: absolute; inset-inline-start: .75rem; bottom: .75rem; width: auto; opacity: .82; }
+.product-card__quick-panel { color: var(--fg); background: color-mix(in oklab, var(--bg) 76%, transparent); border-color: color-mix(in oklab, var(--fg) 24%, transparent); box-shadow: 0 16px 48px rgb(0 0 0 / .42), inset 0 1px 0 rgb(255 255 255 / .14); -webkit-backdrop-filter: blur(22px) saturate(1.45); backdrop-filter: blur(22px) saturate(1.45); }
+.product-card__sale { background: var(--accent); color: var(--accent-fg); }
+@media (hover: hover) and (min-width: 768px) {
+  .product-card__quick-add-wrap { opacity: 0; transform: translateY(5px); transition: opacity var(--dur-2) var(--ease), transform var(--dur-2) var(--ease); }
+  .product-card:hover .product-card__quick-add-wrap, .product-card:focus-within .product-card__quick-add-wrap, .product-card__quick-add-wrap:has([aria-expanded="true"]) { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 767px) {
+  .product-card__quick-add-wrap { inset-inline: .5rem; bottom: .5rem; }
+  .product-card__quick-add { min-height: 2.5rem; font-size: 9px; }
+  .product-card__quick-panel { padding: .65rem; }
+  .product-card__quick-panel > div { gap: .35rem; }
+  .product-card__quick-panel > div > button { min-height: 2rem; padding: .4rem .55rem; font-size: 10px; }
+}
+
+.product-card__swatch { display: grid; width: 1.1rem; height: 1.1rem; place-items: center; overflow: hidden; border: 1px solid color-mix(in oklab, var(--fg) 42%, transparent); border-radius: 999px; background: var(--bg); box-shadow: 0 0 0 2px var(--bg); }
+.product-card__swatch > span:first-child { display: block; width: 100%; height: 100%; border-radius: inherit; }
+.product-card__swatch[title="White"] > span:first-child, .product-card__swatch[title="Ivory"] > span:first-child, .product-card__swatch[title="Cream"] > span:first-child { border: 1px solid rgb(0 0 0 / .15); }
+
+@media (max-width: 639px) { .house-header-utility { display: none; } }
+.house-mobile-menu__join { color: var(--accent); }
+.house-mobile-menu__join span { display: inline-block; transition: transform var(--dur-2) var(--ease); }
+.house-mobile-menu__join:hover span { transform: translate(3px, -3px); }

@@ -21,6 +21,7 @@ export async function listShopProducts(db: Db, rawQuery: unknown, now = new Date
   if (q.occasion) where.push(eq(products.occasion, q.occasion));
   if (q.type) where.push(eq(products.productType, q.type));
   if (q.featured) where.push(eq(products.isFeatured, true));
+  if (q.sale) where.push(sql`${products.compareAtPrice} > ${products.basePrice}`);
   const variantConds: SQL[] = [eq(productVariants.productId, products.id), eq(productVariants.isActive, true)];
   if (q.size) variantConds.push(eq(productVariants.size, q.size));
   if (q.color) variantConds.push(eq(productVariants.colorName, q.color));
@@ -67,7 +68,8 @@ export async function getPublishedProduct(db: Db, brandSlug: string | null, slug
 export type CardData = {
   product: typeof products.$inferSelect; brand: typeof brands.$inferSelect;
   image: { key: string; alt: string } | null; hoverImage: { key: string; alt: string } | null;
-  colors: string[]; inStock: boolean;
+  colors: string[]; colorSwatches: Array<{ name: string; hex: string | null }>; inStock: boolean;
+  variants: Array<{ id: string; size: string | null; colorName: string | null; colorHex: string | null; unitPrice: number; available: number; allowBackorder: boolean }>;
 };
 
 /** One round of queries for a page of product cards (no N+1). */
@@ -79,7 +81,7 @@ export async function toCardData(db: Db, items: Array<typeof products.$inferSele
     db.select({ pm: productMedia, m: mediaAssets }).from(productMedia).innerJoin(mediaAssets, eq(mediaAssets.id, productMedia.mediaId))
       .where(and(inArray(productMedia.productId, ids), sql`${productMedia.role} IN ('primary','secondary','model')`)).orderBy(asc(productMedia.sortOrder)),
     db.select({ v: productVariants, l: inventoryLevels }).from(productVariants).leftJoin(inventoryLevels, eq(inventoryLevels.variantId, productVariants.id))
-      .where(and(inArray(productVariants.productId, ids), eq(productVariants.isActive, true))),
+      .where(and(inArray(productVariants.productId, ids), eq(productVariants.isActive, true))).orderBy(asc(productVariants.sortOrder)),
   ]);
   const bMap = new Map(brandRows.map((b) => [b.id, b]));
   return items.map((p) => {
@@ -92,7 +94,10 @@ export async function toCardData(db: Db, items: Array<typeof products.$inferSele
       image: first ? { key: first.m.storageKey, alt: first.m.altText ?? p.name } : null,
       hoverImage: second ? { key: second.m.storageKey, alt: second.m.altText ?? p.name } : null,
       colors: [...new Set(pv.map((x) => x.v.colorName).filter((c): c is string => !!c))],
+      colorSwatches: [...new Map(pv.filter((x) => x.v.colorName).map((x) => [x.v.colorName!, { name: x.v.colorName!, hex: x.v.colorHex }])).values()],
       inStock: pv.some((x) => x.l && (x.l.onHand - x.l.reserved > 0 || x.l.allowBackorder)),
+      variants: pv.map(({ v, l }) => ({ id: v.id, size: v.size, colorName: v.colorName, colorHex: v.colorHex, unitPrice: v.priceOverride ?? p.basePrice, available: l ? l.onHand - l.reserved : 0, allowBackorder: l?.allowBackorder ?? false })),
+
     };
   });
 }

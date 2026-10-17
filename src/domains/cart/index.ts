@@ -1,6 +1,6 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
-import { brands, cartItems, carts, discounts, inventoryLevels, productVariants, products } from "@/infrastructure/db/schema";
+import { brands, cartItems, carts, discounts, inventoryLevels, mediaAssets, productMedia, productVariants, products } from "@/infrastructure/db/schema";
 import { AppError } from "@/lib/errors";
 import { computePricing, effectiveUnitPrice, type DiscountRule, type PricingResult } from "@/domains/pricing";
 import { publiclyVisible } from "@/domains/catalog/public";
@@ -65,7 +65,7 @@ export async function applyDiscountCode(db: Db, cartId: string, code: string | n
 }
 
 export type CartLineView = {
-  variantId: string; productId: string; brandId: string; brandName: string; name: string; sku: string; size: string | null; colorName: string | null;
+  variantId: string; productId: string; brandId: string; brandName: string; name: string; sku: string; imageKey: string | null; size: string | null; colorName: string | null;
   unitPrice: number; quantity: number; lineTotal: number; available: number; purchasable: boolean; issue: string | null;
 };
 export type CartView = { cartId: string; currency: string; lines: CartLineView[]; pricing: PricingResult; discountError: string | null; canCheckout: boolean };
@@ -87,17 +87,24 @@ export async function getCartView(db: Db, cartId: string, opts: { shippingTotal?
     const available = r.l ? r.l.onHand - r.l.reserved : 0;
     const unitPrice = effectiveUnitPrice(r.p.basePrice, r.v.priceOverride);
     const issue = !visible || !r.v.isActive ? "No longer available" : !r.l?.allowBackorder && available < i.quantity ? (available > 0 ? `Only ${available} left` : "Sold out") : null;
-    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue }];
+    return [{ variantId: i.variantId, productId: r.p.id, brandId: r.p.brandId, brandName: r.b.name, name: r.p.name, sku: r.v.sku, imageKey: null, size: r.v.size, colorName: r.v.colorName, unitPrice, quantity: i.quantity, lineTotal: unitPrice * i.quantity, available, purchasable: issue === null, issue }];
   });
+  const mediaRows = lines.length ? await db.select({ productId: productMedia.productId, key: mediaAssets.storageKey })
+    .from(productMedia).innerJoin(mediaAssets, eq(mediaAssets.id, productMedia.mediaId))
+    .where(inArray(productMedia.productId, [...new Set(lines.map((l) => l.productId))]))
+    .orderBy(asc(productMedia.sortOrder)) : [];
+  const imageByProduct = new Map<string, string>();
+  for (const m of mediaRows) if (!imageByProduct.has(m.productId)) imageByProduct.set(m.productId, m.key);
+  const displayLines = lines.map((line) => ({ ...line, imageKey: imageByProduct.get(line.productId) ?? null }));
   let rule: DiscountRule | null = null; let discountError: string | null = null;
   if (cart.discountCode) {
     const [d] = await db.select().from(discounts).where(eq(discounts.code, cart.discountCode));
     if (d) rule = { code: d.code, kind: d.kind, value: d.value, brandId: d.brandId, minSubtotal: d.minSubtotal, maxRedemptions: d.maxRedemptions, redemptionCount: d.redemptionCount, startsAt: d.startsAt, endsAt: d.endsAt, isActive: d.isActive };
   }
-  const priced = lines.filter((l) => l.purchasable);
+  const priced = displayLines.filter((l) => l.purchasable);
   const input = { lines: priced.map((l) => ({ variantId: l.variantId, brandId: l.brandId, unitPrice: l.unitPrice, quantity: l.quantity })), shippingTotal: opts.shippingTotal ?? 0, taxBps: opts.taxBps ?? 0, taxInclusive: opts.taxInclusive ?? true, now };
   let pricing: PricingResult;
   try { pricing = computePricing({ ...input, discount: rule }); }
   catch (e) { discountError = e instanceof AppError ? e.message : "Code could not be applied"; pricing = computePricing(input); }
-  return { cartId, currency: cart.currency, lines, pricing, discountError, canCheckout: lines.length > 0 && lines.every((l) => l.purchasable) };
+  return { cartId, currency: cart.currency, lines: displayLines, pricing, discountError, canCheckout: displayLines.length > 0 && displayLines.every((l) => l.purchasable) };
 }

@@ -1,1 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 2000" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2B2BFF"/><stop offset="1" stop-color="#C9B8FF"/></linearGradient><radialGradient id="h" cx=".3" cy=".2" r=".7"><stop offset="0" stop-color="#fff" stop-opacity=".35"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><rect width="1600" height="2000" fill="url(#g)"/><rect width="1600" height="2000" fill="url(#h)"/><text x="800" y="1000" text-anchor="middle" font-family="sans-serif" font-size="40" fill="#fff" fill-opacity=".55">PLACEHOLDER - replace with real photography</text></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 2000" preserveAspectRatio="xMidYMid slice">
+<defs>
+  <linearGradient id="night" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1d1760"/><stop offset=".52" stop-color="#09081d"/><stop offset="1" stop-color="#06050f"/></linearGradient>
+  <linearGradient id="sole" x1="0" y1="0" x2="1" y2=".2"><stop stop-color="#fff" /><stop offset=".5" stop-color="#c9b8ff"/><stop offset="1" stop-color="#7b67f6"/></linearGradient>
+  <linearGradient id="upper" x1="0" y1="0" x2=".8" y2="1"><stop stop-color="#e4ff3a"/><stop offset=".35" stop-color="#b9ff54"/><stop offset=".7" stop-color="#2b2bff"/><stop offset="1" stop-color="#8e76ff"/></linearGradient>
+  <radialGradient id="neon" cx=".45" cy=".4" r=".65"><stop stop-color="#d7ff36" stop-opacity=".7"/><stop offset=".45" stop-color="#5c43ff" stop-opacity=".3"/><stop offset="1" stop-color="#2b2bff" stop-opacity="0"/></radialGradient>
+  <filter id="blur"><feGaussianBlur stdDeviation="55"/></filter>
+  <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".68" numOctaves="2" stitchTiles="stitch"/><feColorMatrix values="1 0 0 0 0 0 1 0 0 0 0 0 1 0 0 0 0 0 .1 0"/></filter>
+</defs>
+<rect width="1600" height="2000" fill="url(#night)"/>
+<circle cx="1080" cy="430" r="500" fill="#3325ff" opacity=".45" filter="url(#blur)"/><circle cx="360" cy="1350" r="410" fill="#d7ff36" opacity=".15" filter="url(#blur)"/>
+<path d="M0 0H510L1180 2000H0Z" fill="#fff" opacity=".025"/><path d="M1600 0H1310L700 2000H1600Z" fill="#b9b0ff" opacity=".04"/>
+<g transform="translate(80 230) rotate(-13 720 800)">
+  <ellipse cx="760" cy="1130" rx="670" ry="150" fill="#000" opacity=".55" filter="url(#blur)"/>
+  <path d="M120 1010C300 980 380 820 500 720C610 626 716 610 816 698L1050 890C1130 956 1230 970 1350 1008C1430 1036 1450 1110 1390 1165C1320 1228 1190 1236 1030 1225L310 1180C190 1172 110 1110 120 1010Z" fill="url(#sole)" stroke="#fff" stroke-opacity=".65" stroke-width="10"/>
+  <path d="M135 1000C270 968 365 830 476 742C574 665 687 636 777 704L1030 900C1110 965 1232 974 1340 1012L1285 1050L1010 1020L790 845L585 828L438 1015L220 1080Z" fill="url(#upper)"/>
+  <path d="M474 748C500 824 566 886 658 917L777 704C687 636 574 665 474 748Z" fill="#2b2bff" opacity=".92"/>
+  <path d="M580 812L720 838L844 922L785 964L650 893L538 875Z" fill="#f6f4ff" opacity=".9"/>
+  <path d="M550 825L675 854M530 852L655 883M512 880L637 912" stroke="#10102a" stroke-width="15" stroke-linecap="round"/>
+  <path d="M1040 900L1150 960L1240 987L1192 1020L1080 986Z" fill="#e4ff3a"/>
+  <path d="M250 1105L1230 1160" stroke="#17153d" stroke-opacity=".5" stroke-width="16"/>
+  <path d="M370 1145L425 1150M495 1150L550 1155M620 1155L675 1160M745 1160L800 1165M870 1165L925 1170M995 1170L1050 1175" stroke="#17153d" stroke-opacity=".45" stroke-width="8"/>
+</g>
+<rect width="1600" height="2000" fill="url(#neon)"/>
+<path d="M95 130H1505" stroke="#e4ff3a" stroke-opacity=".65"/><path d="M95 1870H1505" stroke="#e4ff3a" stroke-opacity=".35"/>
+<text x="100" y="105" fill="#f6f4ff" fill-opacity=".82" font-family="Arial,sans-serif" font-size="20" letter-spacing="9">VÉRANE  /  ALOMZIEE FOOTIES</text>
+<text x="100" y="1930" fill="#e4ff3a" font-family="Arial,sans-serif" font-size="25" font-weight="700" letter-spacing="6">UNAPOLOGETIC EXPRESSION</text>
+<rect width="1600" height="2000" filter="url(#grain)" opacity=".13"/>
+</svg>
