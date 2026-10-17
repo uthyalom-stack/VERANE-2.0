@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { desc, eq, inArray, or, sql } from "drizzle-orm";
 import { adminCtx } from "@/lib/admin";
 import { can, scopedBrandIds } from "@/domains/authorization";
 import { brands, backInStockSubscriptions, collaborationRequests, pickupLocations, products, trackingCampaigns, trackingCampaignVisits } from "@/infrastructure/db/schema";
@@ -70,7 +70,7 @@ export default async function OperationsAdminPage() {
       {requests.filter((r) => r.status === "pending" && can(actor, "content.write", r.toBrandId)).map((r) => <div key={r.id} className="mt-4 rounded-[var(--r-md)] border border-line p-4"><p className="font-medium">{r.title}</p><p className="mt-1 text-sm text-muted">{brandNames.get(r.fromBrandId)} → {brandNames.get(r.toBrandId)}</p>{r.message && <p className="mt-3 text-sm">{r.message}</p>}<div className="mt-4 max-w-sm"><ActionForm action={reviewCollaborationRequestAction} submitLabel="Review request" hidden={{ requestId: r.id }} fields={[{ name: "status", label: "Decision", type: "select", options: [["accepted", "Accept and create draft collaboration"], ["rejected", "Reject request"]] }]} /></div></div>)}
       <div className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Request a collaboration</h3><div className="max-w-2xl"><ActionForm action={createCollaborationRequestAction} submitLabel="Send request" fields={[
         { name: "fromBrandId", label: "Requesting brand", type: "select", options: visibleBrands.map((b) => [b.id, b.name] as [string, string]) },
-        { name: "toBrandId", label: "Partner brand", type: "select", options: allBrands.filter((b) => !visibleBrands.some((v) => v.id === b.id)).map((b) => [b.id, b.name] as [string, string]) },
+        { name: "toBrandId", label: "Partner brand", type: "select", options: allBrands.map((b) => [b.id, b.name] as [string, string]) },
         { name: "title", label: "Collaboration title" }, { name: "message", label: "Proposal / notes", type: "textarea", required: false },
       ]} /></div></div>
     </Panel> : null}
