@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { addToBagAction } from "@/app/actions/cart";
 import { toggleWishlistAction } from "@/app/actions/account";
 import { BAG_CHANGED, BAG_OPEN } from "./bag-drawer";
+import { PRODUCT_VARIANT_CHANGED } from "./variant-events";
 
 export type PanelVariant = { id: string; size: string | null; colorName: string | null; colorHex: string | null; unitPrice: number; available: number; allowBackorder: boolean };
 
@@ -20,6 +21,7 @@ export function PurchasePanel({ productId, currency, variants, wished, signedIn,
   const inColor = variants.filter((v) => !color || v.colorName === color);
   const sizes = [...new Set(inColor.map((v) => v.size).filter(Boolean))] as string[];
   const chosen = inColor.find((v) => (sizes.length ? v.size === size : true));
+  useEffect(() => { window.dispatchEvent(new CustomEvent(PRODUCT_VARIANT_CHANGED, { detail: { variantId: chosen?.id ?? null } })); }, [chosen?.id]);
   const sellable = (v?: PanelVariant) => !!v && (v.available > 0 || v.allowBackorder);
   const maxQty = chosen ? (chosen.allowBackorder ? 10 : Math.min(10, chosen.available)) : 1;
   const needSize = sizes.length > 0 && !size;
