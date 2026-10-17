@@ -205,7 +205,6 @@ export async function priceShippingSelectionsAction(form: Record<string, string>
 export async function placeOrderAction(form: Record<string, string>): Promise<ActionState> {
   let url: string | null = null;
   const res = await run(async () => {
-    const optionId = z.string().min(1).parse(form.shippingOptionId);
     const a = addressSchema.parse(form);
     const cartId = await peekCartId();
     if (!cartId) throw new AppError("VALIDATION", "Your bag is empty");
@@ -213,20 +212,7 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
     const view = await getCartView(db, cartId, tax());
     if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
     if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable");
-    let shipping: { id: string; name: string; amountMinor: number; meta?: Record<string, unknown> };
-    if (optionId.startsWith("pickup:")) {
-      const pickupLocationId = optionId.slice("pickup:".length);
-      const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
-      if (brandIds.length !== 1) throw new AppError("VALIDATION", "Pickup is available only when your bag contains products from one brand");
-      const [location] = await db.select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
-      if (!location) throw new AppError("VALIDATION", "That pickup location is no longer available. Please choose again.");
-      shipping = { id: optionId, name: `Pickup — ${location.name}`, amountMinor: 0, meta: { method: "pickup", pickupLocationId: location.id } };
-    } else {
-      const { options } = await quote(form);
-      const chosen = options.find((option) => option.id === optionId);
-      if (!chosen) throw new AppError("VALIDATION", "That delivery option is no longer available. Please choose again.");
-      shipping = { id: chosen.id, name: `${chosen.carrier} — ${chosen.name}`, amountMinor: chosen.amountMinor, meta: { method: "delivery" } };
-    }
+    const { shipping } = await resolveBrandSelections(form, cartId, view, db);
     const user = await getCurrentUser();
     const env = getEnv();
     const input = checkoutInput.parse({
