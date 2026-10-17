@@ -28,7 +28,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={`${bodoni.variable} ${instrument.variable} ${syne.variable}`}>
       <body>
-        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd).replace(/</g, "\\u003c") }} />
         <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:bg-accent focus:px-4 focus:py-2 focus:text-accent-fg">Skip to content</a>
         <SiteHeader cartCount={Number(row?.n ?? 0)} signedIn={user?.kind === "customer"} siteName={config.settings.siteName} tagline={config.settings.tagline} navigation={config.navigation} announcementEnabled={config.settings.announcementEnabled} announcementText={config.settings.announcementText} />
         <main id="main">{children}</main>
