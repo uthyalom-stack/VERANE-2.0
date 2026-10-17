@@ -43,6 +43,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
       </div>
       <div className="mt-10 grid gap-8 md:grid-cols-[220px_1fr] lg:grid-cols-[240px_1fr] lg:gap-12">
         <aside aria-label="Filters" className="house-shop-filters md:sticky md:top-24 md:self-start">
+          <div className="mb-5 flex items-center justify-between"><p className="house-kicker">Refine the edit</p>{Object.values(sp).some(Boolean) && <Link href="/shop" className="text-xs text-muted underline underline-offset-4">Clear all</Link>}</div>
           {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
           {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
           {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
