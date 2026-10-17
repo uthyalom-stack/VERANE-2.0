@@ -24,12 +24,12 @@ export default async function SearchPage({ searchParams }: { searchParams: Promi
     cards = await toCardData(db, rows.sort((a, b) => order.get(a.id)! - order.get(b.id)!));
   }
   return (
-    <div className="mx-auto max-w-[1600px] px-5 pb-10 pt-28 md:px-10">
-      <h1 className="display text-6xl md:text-8xl">Search</h1>
-      <form role="search" action="/search" className="mt-8 flex max-w-2xl gap-3">
+    <div className="mx-auto max-w-[1600px] px-5 pb-16 pt-28 md:px-10">
+      <div className="house-index-intro flex flex-col gap-5 md:flex-row md:items-end md:justify-between"><div><p className="house-kicker">Find your next piece</p><h1 className="display mt-4 text-6xl md:text-8xl">Search the house.</h1></div><p className="max-w-sm text-sm leading-relaxed text-muted">Search by product name, type, style or occasion across both VÉRANE brands.</p></div>
+      <form role="search" action="/search" className="house-search-form glass mt-8 flex max-w-3xl gap-3 rounded-[var(--r-md)] p-2">
         <label htmlFor="q" className="sr-only">Search the house</label>
-        <input id="q" name="q" defaultValue={q} autoFocus placeholder="Black dress, sneakers, wool coat" className="min-h-12 flex-1 rounded-[var(--r-sm)] border border-line bg-surface px-4 placeholder:text-muted" />
-        <Button type="submit">Search</Button>
+        <input id="q" name="q" defaultValue={q} autoFocus placeholder="Black dress, sneakers, wool coat" className="min-h-12 min-w-0 flex-1 rounded-[var(--r-sm)] border border-transparent bg-transparent px-4 outline-none placeholder:text-muted focus:border-line" />
+        <Button type="submit">Search <span aria-hidden="true">↗</span></Button>
       </form>
       <div className="mt-12" aria-live="polite">
         {!q ? <p className="text-muted">Search by name, type, style or occasion.</p>
