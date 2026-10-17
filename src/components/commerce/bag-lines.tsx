@@ -19,7 +19,7 @@ export function BagLines({ view, onChanged }: { view: CartView; onChanged: () =>
               <div className="house-bag-line__image relative aspect-[4/5] w-24 shrink-0 overflow-hidden rounded-[var(--r-sm)] bg-surface sm:w-32">{l.imageKey ? <Media storageKey={l.imageKey} alt={l.name} /> : <div className="grid h-full place-items-center px-2 text-center text-[10px] text-muted">{l.brandName}</div>}</div>
               <div className="min-w-0 flex-1">
                 <div className="flex justify-between gap-3"><div className="min-w-0"><p className="text-[10px] uppercase tracking-[0.16em] text-muted">{l.brandName}</p><p className="mt-2 leading-snug">{l.name}</p><p className="mt-1 text-xs text-muted">{[l.colorName, l.size && `Size ${l.size}`].filter(Boolean).join(" · ")}</p>
-                  {l.isPreOrder && <p className="mt-2 text-xs text-accent">Pre-order · made available after production</p>}
+                  {l.isPreOrder && <p className="mt-2 text-xs text-accent">Pre-order{l.fulfillmentTime ? ` · estimated lead time: ${l.fulfillmentTime}` : " · made available after production"}</p>}
                   {l.customMeasurements && <p className="mt-2 text-xs text-muted">Custom measurements (cm): {Object.entries(l.customMeasurements).map(([key, value]) => `${key} ${value}`).join(" · ")}</p>}</div><p className="whitespace-nowrap text-sm">{formatMoney(l.lineTotal, view.currency)}</p></div>
                 {l.issue && <p role="alert" className="mt-2 text-sm text-red-400">{l.issue}. Reduce the quantity or remove it to continue.</p>}
               </div>
