@@ -21,7 +21,7 @@ const schema = z.object({
   SHIPBUBBLE_BASE_URL: z.string().default("https://api.shipbubble.com/v1"),
   EMAIL_DRIVER: z.enum(["console", "resend"]).default("console"),
   RESEND_API_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("VÉRANE <no-reply@example.com>"),
+  EMAIL_FROM: z.string().default("Store <no-reply@example.com>"),
   ADMIN_NOTIFY_EMAIL: z.string().optional(),
   CRON_SECRET: z.string().min(24).optional(),
   TAX_BPS: z.coerce.number().int().min(0).max(5000).default(0),
