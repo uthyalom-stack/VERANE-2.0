@@ -1,5 +1,5 @@
 "use client";
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { formatMoney } from "@/lib/money";
 import { Button } from "@/components/ui/button";
 import { addToBagAction } from "@/app/actions/cart";
