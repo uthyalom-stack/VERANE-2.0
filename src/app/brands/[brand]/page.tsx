@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/lib/server";
-import { brands } from "@/infrastructure/db/schema";
+import { brands, pageBlocks, pages } from "@/infrastructure/db/schema";
 import { listShopProducts, toCardData } from "@/domains/catalog/public";
 import { ProductCard } from "@/components/commerce/product-card";
 import { EditorialImage } from "@/components/ui/editorial-image";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
+import { HomeBlocks } from "@/components/home/blocks";
 
 export const dynamic = "force-dynamic";
 type P = { params: Promise<{ brand: string }> };
@@ -25,6 +26,9 @@ export default async function BrandPage({ params }: P) {
   if (!b || !b.isActive) notFound();
   const { items } = await listShopProducts(db, { brand: b.slug, pageSize: 12 });
   const cards = await toCardData(db, items);
+  const now = new Date();
+  const [landing] = await db.select().from(pages).where(and(eq(pages.kind, "brand_landing"), eq(pages.brandId, b.id), eq(pages.slug, b.slug), or(and(eq(pages.status, "published"), or(isNull(pages.publishAt), lte(pages.publishAt, now))), and(eq(pages.status, "scheduled"), lte(pages.publishAt, now)))));
+  const blocks = landing ? await db.select().from(pageBlocks).where(and(eq(pageBlocks.pageId, landing.id), eq(pageBlocks.isVisible, true))).orderBy(asc(pageBlocks.sortOrder)) : [];
   const uthy = b.themeKey === "uthy";
   return (
     <div data-brand={b.themeKey} className="bg-bg text-fg">
@@ -45,6 +49,7 @@ export default async function BrandPage({ params }: P) {
         <div><p className="house-kicker">A VÉRANE house / {uthy ? "One" : "Two"}</p><h2 className="display mt-4 max-w-[14ch] text-4xl md:text-6xl">{uthy ? "Less noise. More presence." : "Made to be noticed."}</h2></div>
         <p className="max-w-md text-sm leading-relaxed text-muted">{uthy ? "A considered point of view, built around shape, texture and quiet confidence." : "A bolder point of view, built for contrast, movement and unapologetic self-expression."}</p>
       </section>
+      {blocks.length > 0 && <HomeBlocks db={db} blocks={blocks} brandSlug={b.slug} />}
       <section className="mx-auto max-w-[1600px] px-5 pb-24 pt-8 md:px-10">
         <div className="house-section-heading mb-10 flex items-end justify-between gap-4"><div><p className="house-kicker">{uthy ? "Quietly considered" : "New energy"}</p><h2 className="display mt-3 text-4xl md:text-6xl">{uthy ? "The collection" : "Fresh drops"}</h2></div><span className="glass rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.15em]">{b.name}</span></div>
         {cards.length === 0 ? <EmptyState title="Nothing published yet">New pieces from {b.name} will appear here.</EmptyState> : <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4">{cards.map((c) => <ProductCard key={c.product.id} item={c} />)}</div>}
