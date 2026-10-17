@@ -44,18 +44,18 @@ export function CheckoutForm({ view, defaults, savedAddresses, signedIn }: { vie
             <div className="grid gap-1.5"><label htmlFor="state" className="text-sm">State</label><select id="state" value={f.state} onChange={set("state")} required className="min-h-12 rounded-[var(--r-sm)] border border-line bg-surface px-3"><option value="">Select state</option>{NG_STATES.map((s) => <option key={s}>{s}</option>)}</select></div>
             {input("postalCode", "Postal code (optional)", { ac: "postal-code", req: false })}</div>
           <p className="mt-3 text-sm text-muted">We currently deliver within Nigeria.</p></section>
-        <section aria-labelledby="s-del" className="house-checkout-section"><p className="house-kicker mb-3">03 / Choose your service</p><h2 id="s-del" className="display text-3xl">Delivery</h2>
+        <section aria-labelledby="s-del" className="house-checkout-section"><p className="house-kicker mb-3">03 / Choose your service</p><h2 id="s-del" className="display text-3xl">Delivery or pickup</h2>
           {!options ? <Button className="mt-4" variant="outline" onClick={quote} disabled={!complete || pending}>{pending ? "Finding options…" : "Show delivery options"}</Button> : (
             <fieldset className="mt-4 grid gap-3"><legend className="sr-only">Delivery options</legend>
               {options.map((o) => <label key={o.id} className="flex cursor-pointer items-center justify-between gap-4 rounded-[var(--r-md)] border border-line p-4 has-[:checked]:border-accent">
-                <span className="flex items-center gap-3"><input type="radio" name="ship" checked={sel === o.id} onChange={() => setSel(o.id)} /><span>{o.carrier} — {o.name}{o.eta && <span className="block text-xs text-muted">{o.eta}</span>}</span></span><span>{formatMoney(o.amountMinor, view.currency)}</span></label>)}</fieldset>)}</section>
+                <span className="flex items-center gap-3"><input type="radio" name="ship" checked={sel === o.id} onChange={() => setSel(o.id)} /><span>{o.method === "pickup" ? o.name : `${o.carrier} — ${o.name}`}{o.eta && <span className="block text-xs text-muted">{o.method === "pickup" ? `Pickup address: ${o.eta}` : o.eta}</span>}</span></span><span>{formatMoney(o.amountMinor, view.currency)}</span></label>)}</fieldset>)}</section>
       </div>
       <aside className="house-checkout-summary glass h-fit rounded-[var(--r-lg)] p-6 md:sticky md:top-24"><p className="house-kicker mb-3">04 / Final review</p><h2 className="display text-3xl">Your order</h2>
         <ul className="mt-4 divide-y divide-line text-sm">{view.lines.map((l) => <li key={l.variantId} className="flex items-center justify-between gap-3 py-3"><span className="flex min-w-0 items-center gap-3"><span className="house-checkout-item__image relative aspect-[4/5] w-14 shrink-0 overflow-hidden rounded-[var(--r-sm)] bg-surface">{l.imageKey ? <Media storageKey={l.imageKey} alt="" /> : null}</span><span className="min-w-0">{l.name}<span className="mt-1 block text-xs text-muted">{[l.colorName, l.size && `Size ${l.size}`].filter(Boolean).join(" · ")} × {l.quantity}</span></span></span><span className="shrink-0">{formatMoney(l.lineTotal, view.currency)}</span></li>)}</ul>
         <div className="mt-4">{chosen ? <Totals view={{ ...view, pricing: { ...view.pricing, shippingTotal: chosen.amountMinor, total: chosen.total } }} /> : <Totals view={view} />}</div>
         <p role="alert" className="mt-4 min-h-5 text-sm text-red-400">{err}</p>
         <Button className="mt-2 w-full" onClick={pay} disabled={!chosen || pending}>{pending ? "Starting payment…" : chosen ? `Pay ${formatMoney(chosen.total, view.currency)}` : "Choose delivery to continue"}</Button>
-        <p className="mt-3 text-xs text-muted">You&apos;ll complete payment securely with Paystack. Totals are confirmed by our server before you pay.</p></aside>
+        <p className="mt-3 text-xs text-muted">You&apos;ll complete payment securely with the payment provider. Totals and pickup eligibility are confirmed by our server before you pay.</p></aside>
     </div>
   );
 }
