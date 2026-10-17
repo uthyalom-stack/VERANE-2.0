@@ -41,6 +41,7 @@ export const cartItems = sqliteTable(
     cartId: text().notNull().references(() => carts.id, { onDelete: "cascade" }),
     variantId: text().notNull().references(() => productVariants.id, { onDelete: "cascade" }),
     quantity: integer().notNull(),
+    customMeasurements: text({ mode: "json" }).$type<Record<string, number>>(),
     createdAt: createdAt(),
   },
   (t) => [uniqueIndex("cart_items_uq").on(t.cartId, t.variantId)],
