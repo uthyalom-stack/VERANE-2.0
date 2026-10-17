@@ -1,9 +1,10 @@
-import { desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { adminCtx } from "@/lib/admin";
 import { can, scopedBrandIds } from "@/domains/authorization";
-import { brands, backInStockSubscriptions, collaborationRequests, pickupLocations, products, trackingCampaigns, trackingCampaignVisits } from "@/infrastructure/db/schema";
+import { brands, backInStockSubscriptions, collaborationRequests, orderAttributions, orders, orderItems, pickupLocations, products, trackingCampaigns, trackingCampaignVisits } from "@/infrastructure/db/schema";
 import { PageHead, Panel, Table, Badge, when } from "@/components/admin/ui";
 import { ActionForm } from "@/components/ui/action-form";
+import { formatMoney } from "@/lib/money";
 import { cancelBackInStockSubscriptionAction, createCollaborationRequestAction, reviewCollaborationRequestAction, savePickupLocationAction, saveTrackingLinkAction } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,29 @@ export default async function OperationsAdminPage() {
     db.select({ campaignId: trackingCampaignVisits.campaignId, visits: sql<number>`count(*)` }).from(trackingCampaignVisits).groupBy(trackingCampaignVisits.campaignId),
   ]);
   const contentScope = scopedBrandIds(actor, "content.write");
+  const attributionQuery = db.select({
+    campaignId: orderAttributions.campaignId,
+    orders: sql<number>`count(distinct ${orderAttributions.orderId})`,
+    revenue: sql<number>`coalesce(sum(case when ${orders.paymentStatus} = 'paid' then ${orderItems.lineTotal} else 0 end), 0)`,
+  }).from(orderAttributions)
+    .innerJoin(orders, eq(orders.id, orderAttributions.orderId))
+    .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+    .where(or(isNull(orderAttributions.brandId), eq(orderItems.brandId, orderAttributions.brandId)))
+    .groupBy(orderAttributions.campaignId);
+  const attributionStats = contentScope === "all"
+    ? await attributionQuery
+    : contentScope.length
+      ? await db.select({
+          campaignId: orderAttributions.campaignId,
+          orders: sql<number>`count(distinct ${orderAttributions.orderId})`,
+          revenue: sql<number>`coalesce(sum(case when ${orders.paymentStatus} = 'paid' then ${orderItems.lineTotal} else 0 end), 0)`,
+        }).from(orderAttributions)
+          .innerJoin(orders, eq(orders.id, orderAttributions.orderId))
+          .innerJoin(orderItems, eq(orderItems.orderId, orders.id))
+          .where(and(inArray(orderAttributions.brandId, contentScope), eq(orderItems.brandId, orderAttributions.brandId)))
+          .groupBy(orderAttributions.campaignId)
+      : [];
+
   const orderScope = scopedBrandIds(actor, "orders.manage");
   const inventoryScope = scopedBrandIds(actor, "inventory.read");
   const visibleBrands = contentScope === "all" ? allBrands : allBrands.filter((b) => contentScope.includes(b.id));
@@ -32,6 +56,7 @@ export default async function OperationsAdminPage() {
     ? await db.select({ s: backInStockSubscriptions, productName: products.name, brandId: products.brandId }).from(backInStockSubscriptions).innerJoin(products, eq(products.id, backInStockSubscriptions.productId)).orderBy(desc(backInStockSubscriptions.createdAt)).limit(100)
     : inventoryScope.length ? await db.select({ s: backInStockSubscriptions, productName: products.name, brandId: products.brandId }).from(backInStockSubscriptions).innerJoin(products, eq(products.id, backInStockSubscriptions.productId)).where(inArray(products.brandId, inventoryScope)).orderBy(desc(backInStockSubscriptions.createdAt)).limit(100) : [];
   const visits = new Map(campaignVisits.map((v) => [v.campaignId, v.visits]));
+  const attributionByCampaign = new Map(attributionStats.map((s) => [s.campaignId, s]));
   const contentBrandOptions: Array<[string, string]> = [...(can(actor, "content.write", null) ? [["", "House-wide"]] as Array<[string, string]> : []), ...visibleBrands.map((b) => [b.id, b.name] as [string, string])];
   const pickupBrandOptions: Array<[string, string]> = pickupBrands.map((b) => [b.id, b.name]);
 
@@ -46,7 +71,7 @@ export default async function OperationsAdminPage() {
 
     {can(actor, "content.write", null) || visibleBrands.length > 0 ? <Panel title="Social tracking links">
       <p className="mb-4 text-sm text-muted">Use <code>/go/slug</code> in social posts. Visits are recorded against the campaign; destinations are restricted to on-site paths.</p>
-      <Table head={["Campaign", "Brand", "Link", "Visits", "Status", "Created"]} rows={tracking.map((c) => [c.name, c.brandId ? brandNames.get(c.brandId) ?? "Unknown" : "House-wide", <code key="url">/go/{c.slug}</code>, visits.get(c.id) ?? 0, <Badge key="status" tone={c.isActive ? "ok" : "warn"}>{c.isActive ? "Active" : "Paused"}</Badge>, when(c.createdAt)])} empty="No tracking links created yet." />
+      <Table head={["Campaign", "Brand", "Link", "Visits", "Attributed orders", "Paid item revenue", "Status", "Created"]} rows={tracking.map((c) => { const stats = attributionByCampaign.get(c.id); return [c.name, c.brandId ? brandNames.get(c.brandId) ?? "Unknown" : "House-wide", <code key="url">/go/{c.slug}</code>, visits.get(c.id) ?? 0, stats?.orders ?? 0, formatMoney(stats?.revenue ?? 0), <Badge key="status" tone={c.isActive ? "ok" : "warn"}>{c.isActive ? "Active" : "Paused"}</Badge>, when(c.createdAt)]; })} empty="No tracking links created yet." />
       {tracking.map((c) => <div key={c.id} className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Edit {c.name}</h3><div className="max-w-2xl"><ActionForm action={saveTrackingLinkAction} submitLabel="Save tracking link" hidden={{ id: c.id }} fields={[
         { name: "name", label: "Campaign name", defaultValue: c.name },
         { name: "slug", label: "Short slug", defaultValue: c.slug, hint: "Public link: /go/this-slug" },
