@@ -39,7 +39,7 @@ export default async function OrderDetail({ params }: { params: Promise<{ id: st
           {pickup && <p className="mt-2 text-sm text-muted">{[pickup.name, pickup.addressLine1, pickup.addressLine2, pickup.city, pickup.state, pickup.postalCode].filter(Boolean).join(", ")}{pickup.instructions ? ` · ${pickup.instructions}` : ""}</p>}
           {f.method === "delivery" && (f.trackingNumber || f.trackingUrl) && <p className="mt-2 text-sm text-muted">Tracking: {f.trackingNumber ?? "—"} {f.trackingUrl ? <a className="underline" href={f.trackingUrl} target="_blank" rel="noopener noreferrer">Track shipment</a> : null}</p>}
           {f.method === "delivery" && o.paymentStatus === "paid" && can(actor, "orders.manage", f.brandId) && !legacyMultiBrandShipment && !shipments.some((shipment) => shipment.brandId === f.brandId && shipment.status !== "failed") && <div className="mt-3 max-w-sm"><ActionForm action={createBrandShipmentAction} submitLabel={`Create ${brandNames.get(f.brandId) ?? "brand"} shipment`} hidden={{ orderId: o.id, brandId: f.brandId }} fields={[]} /></div>}
-          {options.length > 0 && <div className="mt-3 max-w-sm"><ActionForm action={updateBrandFulfilmentAction} submitLabel="Update fulfilment" hidden={{ fulfilmentId: f.id }} fields={[{ name: "status", label: "Next status", type: "select", options }]} /></div>}
+          {options.length > 0 && can(actor, "orders.manage", f.brandId) && <div className="mt-3 max-w-sm"><ActionForm action={updateBrandFulfilmentAction} submitLabel="Update fulfilment" hidden={{ fulfilmentId: f.id }} fields={[{ name: "status", label: "Next status", type: "select", options }]} /></div>}
         </div>;
       })}
     </Panel>}
