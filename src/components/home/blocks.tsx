@@ -22,7 +22,7 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
       {await Promise.all(blocks.map(async (b) => {
         switch (b.type) {
           case "campaign_hero": return brandSlug ? null : <CampaignHero key={b.id} db={db} data={b.data} />;
-          case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} siteName={siteConfig.settings.siteName} heroImageUrls={siteConfig.heroImageUrls} />;
+          case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} siteName={siteConfig.settings.siteName} />;
           case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} />;
           case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "outfit_builder_intro": return <BuilderIntro key={b.id} />;
@@ -38,7 +38,7 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
   );
 }
 
-function SplitHero({ data, brands, siteName, heroImageUrls }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>>; siteName: string; heroImageUrls: { uthy: string | null; alomzie: string | null } }) {
+function SplitHero({ data, brands, siteName }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>>; siteName: string }) {
   const copy: Record<string, { index: string; mood: string; action: string }> = {
     uthy: { index: "01", mood: "Quiet confidence. Considered form.", action: "Enter the house" },
     alomzie: { index: "02", mood: "Make the entrance yours.", action: "Explore the collection" },
