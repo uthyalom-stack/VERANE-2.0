@@ -9,6 +9,11 @@ import { shopQuery, type ShopQuery } from "./schemas";
 export const publiclyVisible = (now = new Date()): SQL =>
   or(eq(products.status, "published"), and(eq(products.status, "scheduled"), lte(products.publishAt, now)))!;
 
+/** Keep scheduled publication semantics consistent across every public product surface. */
+export function isPubliclyVisibleProduct(product: { status: string; publishAt: Date | null }, now = new Date()): boolean {
+  return product.status === "published" || (product.status === "scheduled" && product.publishAt !== null && product.publishAt <= now);
+}
+
 export async function listShopProducts(db: Db, rawQuery: unknown, now = new Date()) {
   const q: ShopQuery = shopQuery.parse(rawQuery);
   const where: SQL[] = [publiclyVisible(now)];
