@@ -1,4 +1,5 @@
 import { getDb } from "@/infrastructure/db/client";
+import { getSiteConfig } from "@/domains/site-content";
 import { getEnv } from "@/lib/env";
 import { getOrderForViewer } from "@/domains/orders/queries";
 import { viewerFromCookies } from "@/lib/http/order-access";
@@ -25,7 +26,7 @@ function money(minor: number, currency: string) {
 function makePdf(lines: string[]): Uint8Array {
   const pages: string[][] = [];
   for (let i = 0; i < lines.length; i += 48) pages.push(lines.slice(i, i + 48));
-  if (!pages.length) pages.push(["VÉRANE receipt"]);
+  if (!pages.length) pages.push(["Store receipt"]);
 
   const objects: string[] = [];
   const pageIds = pages.map((_, i) => 4 + i * 2);
@@ -44,7 +45,7 @@ function makePdf(lines: string[]): Uint8Array {
     objects.push(`<< /Length ${text.length} >>\nstream\n${text}\nendstream`);
   });
 
-  let pdf = "%PDF-1.4\n%VERANE\n";
+  let pdf = "%PDF-1.4\n%STORE\n";
   const offsets = [0];
   objects.forEach((object, i) => {
     offsets.push(pdf.length);
@@ -60,13 +61,15 @@ function makePdf(lines: string[]): Uint8Array {
 export async function GET(_: Request, { params }: { params: Promise<{ orderNumber: string }> }) {
   const { orderNumber } = await params;
   const env = getEnv();
-  const bundle = await getOrderForViewer(getDb(), orderNumber, await viewerFromCookies(orderNumber), env.TOKEN_PEPPER);
+  const db = getDb();
+  const siteConfig = await getSiteConfig(db);
+  const bundle = await getOrderForViewer(db, orderNumber, await viewerFromCookies(orderNumber), env.TOKEN_PEPPER);
   if (!bundle) return new Response("Not found", { status: 404 });
 
   const { order, items, fulfillments } = bundle;
   const address = order.shippingAddressJson ?? {};
   const lines = [
-    "VERANE",
+    siteConfig.settings.siteName,
     "ORDER RECEIPT",
     "",
     `Order: ${order.orderNumber}`,
@@ -99,18 +102,19 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderNumbe
     "",
     "FULFILMENT",
     ...fulfillments.flatMap((f) => { let p: Record<string, string> = {}; try { p = f.pickupLocationSnapshot ? JSON.parse(f.pickupLocationSnapshot) as Record<string, string> : {}; } catch { p = {}; } return [`${f.method.toUpperCase()}: ${f.status.replace(/_/g, " ")}`, ...(f.method === "pickup" ? [String(p.name ?? "Pickup location"), [p.addressLine1, p.addressLine2, p.city, p.state, p.postalCode].filter(Boolean).join(", "), String(p.instructions ?? "")] : [`${f.carrier ?? "Delivery"} ${f.trackingNumber ?? ""} ${f.trackingUrl ?? ""}`]), ""]; }),
-    "Thank you for shopping with VERANE.",
+    `Thank you for shopping with ${siteConfig.settings.siteName}.`,
     "Keep this receipt for your records.",
   ];
 
   const pdf = makePdf(lines);
+  const filePrefix = siteConfig.settings.siteName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "store";
   const body = new ArrayBuffer(pdf.byteLength);
   new Uint8Array(body).set(pdf);
   return new Response(body, {
     status: 200,
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `attachment; filename="verane-${order.orderNumber.toLowerCase()}-receipt.pdf"`,
+      "Content-Disposition": `attachment; filename="${filePrefix}-${order.orderNumber.toLowerCase()}-receipt.pdf"`,
       "Cache-Control": "private, no-store, max-age=0",
       "X-Content-Type-Options": "nosniff",
     },
