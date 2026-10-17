@@ -94,7 +94,7 @@ export default async function OperationsAdminPage() {
     </Panel> : null}
 
     {inventoryScope === "all" || inventoryScope.length > 0 ? <Panel title="Back-in-stock waitlist">
-      <p className="mb-4 text-sm text-muted">This queue lets brand admins review and cancel entries. Automatic restock email delivery is a separate worker workflow and is not represented as live until it is connected.</p>
+      <p className="mb-4 text-sm text-muted">This queue lets brand admins review and cancel entries. When stock is received, active entries for that variant are queued for email and marked notified. Delivery is handled by the transactional email outbox worker.</p>
       <Table head={["Product", "Brand", "Email", "Status", "Joined", "Action"]} rows={subscriptions.map(({ s, productName, brandId }) => [productName, brandNames.get(brandId) ?? brandId, s.email, <Badge key="status" tone={s.status === "active" ? "warn" : s.status === "notified" ? "ok" : ""}>{s.status}</Badge>, when(s.createdAt), s.status === "active" ? <div key="action" className="max-w-xs"><ActionForm action={cancelBackInStockSubscriptionAction} submitLabel="Cancel entry" hidden={{ subscriptionId: s.id }} fields={[]} /></div> : "—"])} empty="No waitlist entries yet." />
     </Panel> : null}
   </div>;
