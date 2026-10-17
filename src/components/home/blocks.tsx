@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Media } from "@/components/ui/media";
+import { EditorialImage } from "@/components/ui/editorial-image";
 import { ButtonLink } from "@/components/ui/button";
 import { ProductCard } from "@/components/commerce/product-card";
 import { listShopProducts, toCardData, listBrands } from "@/domains/catalog/public";
@@ -37,7 +38,6 @@ export async function HomeBlocks({ db, blocks }: { db: Db; blocks: Block[] }) {
 }
 
 function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>> }) {
-  const heroKey: Record<string, string> = { uthy: "placeholders/uthy-hero.svg", alomzie: "placeholders/alomzie-hero.svg" };
   const copy: Record<string, { index: string; mood: string; action: string }> = {
     uthy: { index: "01", mood: "Quiet confidence. Considered form.", action: "Enter the house" },
     alomzie: { index: "02", mood: "Make the entrance yours.", action: "Explore the collection" },
@@ -49,7 +49,7 @@ function SplitHero({ data, brands }: { data: Record<string, unknown>; brands: Aw
           const editorial = copy[b.themeKey] ?? copy.uthy!;
           return (
             <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="house-panel group">
-              <Media storageKey={heroKey[b.themeKey] ?? "placeholders/uthy-hero.svg"} alt={`${b.name} campaign placeholder artwork`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
+              <EditorialImage brand={b.themeKey === "alomzie" ? "alomzie" : "uthy"} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
               <div aria-hidden="true" className="house-panel__shade absolute inset-0" />
               <div className="house-panel__meta absolute inset-x-6 top-24 z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-white/75 md:inset-x-10 md:top-28">
                 <span>VÉRANE / {editorial.index}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span>
