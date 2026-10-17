@@ -2,12 +2,12 @@
 
 /* ---- Design tokens (centralised). Brand themes override the semantic layer only. ---- */
 :root {
-  --vr-ink: #0c0c0e; --vr-bone: #f2f0ec;
+  --vr-ink: #0c0c12; --vr-bone: #f3f1f8; --vr-violet: #9b8cff;
   --uthy-basalt: #121316; --uthy-pewter: #8c9096; --uthy-opal: #e6e8ea; --uthy-champagne: #b9a27a;
   --alo-ink: #0b0a1f; --alo-ultra: #2b2bff; --alo-lilac: #c9b8ff; --alo-citrus: #e4ff3a; --alo-paper: #f6f4ff;
 
   --bg: var(--vr-ink); --fg: var(--vr-bone); --muted: color-mix(in oklab, var(--fg) 62%, transparent);
-  --line: color-mix(in oklab, var(--fg) 16%, transparent); --accent: var(--uthy-champagne); --accent-fg: #111;
+  --line: color-mix(in oklab, var(--fg) 16%, transparent); --accent: var(--vr-violet); --accent-fg: #100e20;
   --surface: color-mix(in oklab, var(--fg) 6%, transparent);
   --glass-bg: color-mix(in oklab, var(--bg) 42%, transparent);
   --glass-line: color-mix(in oklab, var(--fg) 22%, transparent);
@@ -71,6 +71,9 @@ p { max-width: 62ch; text-wrap: pretty; }
 .house-hero__glass { -webkit-backdrop-filter: blur(24px) saturate(1.45); backdrop-filter: blur(24px) saturate(1.45); box-shadow: 0 24px 90px rgb(0 0 0 / .28), inset 0 1px 0 rgb(255 255 255 / .28); animation: house-glass-in 900ms var(--ease) both; }
 .house-hero__glass::before { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(135deg, rgb(255 255 255 / .10), transparent 42%, rgb(255 255 255 / .035)); pointer-events: none; }
 @keyframes house-glass-in { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes house-orb-drift { from { translate: -1.5% 0; scale: .96; } to { translate: 2.5% 2%; scale: 1.04; } }
+@keyframes house-glow-breathe { from { transform: translate3d(-2%, 0, 0) scale(.92); opacity: .55; } to { transform: translate3d(2%, 3%, 0) scale(1.08); opacity: .9; } }
+
 @media (prefers-reduced-motion: reduce) { .house-hero__glass { animation: none; } }
 @media (max-width: 899px) {
   .split-hero { flex-direction: column; min-height: auto; }
@@ -107,14 +110,14 @@ p { max-width: 62ch; text-wrap: pretty; }
 .house-brand-card::after { content: ""; position: absolute; inset: 0; z-index: -1; opacity: .8; background: linear-gradient(125deg, rgb(255 255 255 / .07), transparent 34%, transparent 68%, color-mix(in oklab, var(--accent) 11%, transparent)); pointer-events: none; }
 .house-brand-card[data-brand="uthy"] { --bg: #121316; --fg: #e6e8ea; --accent: #b9a27a; color: var(--fg); }
 .house-brand-card[data-brand="alomzie"] { --bg: #0b0a1f; --fg: #f6f4ff; --accent: #e4ff3a; color: var(--fg); }
-.house-brand-card__orb { position: absolute; z-index: -1; top: 12%; right: -10%; width: min(70%, 26rem); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 32% 28%, color-mix(in oklab, var(--accent) 72%, white), color-mix(in oklab, var(--accent) 24%, transparent) 36%, transparent 70%); opacity: .24; filter: blur(2px); transform: translate3d(0,0,0) scale(.92); transition: transform 900ms var(--ease), opacity 600ms var(--ease); }
+.house-brand-card__orb { position: absolute; z-index: -1; top: 12%; right: -10%; width: min(70%, 26rem); aspect-ratio: 1; border-radius: 50%; background: radial-gradient(circle at 32% 28%, color-mix(in oklab, var(--accent) 72%, white), color-mix(in oklab, var(--accent) 24%, transparent) 36%, transparent 70%); opacity: .24; filter: blur(2px); transform: translate3d(0,0,0) scale(.92); transition: transform 900ms var(--ease), opacity 600ms var(--ease); animation: house-orb-drift 11s ease-in-out infinite alternate; }
 .house-brand-card[data-brand="uthy"] .house-brand-card__orb { background: radial-gradient(circle at 32% 28%, #fff0d2, #b9a27a 24%, transparent 70%); opacity: .2; }
 .house-brand-card[data-brand="alomzie"] .house-brand-card__orb { background: radial-gradient(circle at 32% 28%, #ffffff, #2b2bff 25%, #c9b8ff 40%, transparent 70%); opacity: .38; }
 .house-brand-card:hover { transform: translateY(-4px); border-color: color-mix(in oklab, var(--accent) 55%, transparent); }
 .house-brand-card:hover .house-brand-card__orb { transform: translate3d(-4%, 4%, 0) scale(1.08); opacity: .55; }
 
 .house-builder { background: linear-gradient(115deg, color-mix(in oklab, var(--bg) 75%, #2727ff 25%), color-mix(in oklab, var(--bg) 92%, var(--accent))); }
-.house-builder__glow { position: absolute; z-index: -1; width: 34rem; max-width: 80vw; aspect-ratio: 1; top: -65%; right: -8%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 28%, transparent), transparent 68%); filter: blur(10px); pointer-events: none; }
+.house-builder__glow { position: absolute; z-index: -1; width: 34rem; max-width: 80vw; aspect-ratio: 1; top: -65%; right: -8%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 34%, #5141ff), transparent 68%); filter: blur(10px); pointer-events: none; animation: house-glow-breathe 8s ease-in-out infinite alternate; }
 .house-builder::after { content: ""; position: absolute; inset: 0; z-index: -1; border-radius: inherit; background: linear-gradient(130deg, rgb(255 255 255 / .07), transparent 38%, rgb(255 255 255 / .025)); pointer-events: none; }
 
 .house-look__image { isolation: isolate; }
@@ -132,7 +135,7 @@ p { max-width: 62ch; text-wrap: pretty; }
 /* Shop discovery: editorial introduction, clear controls, and brand-led atmosphere. */
 .house-shop-intro { isolation: isolate; background: linear-gradient(115deg, color-mix(in oklab, var(--bg) 82%, #2424ff 18%), var(--bg) 68%); }
 .house-shop-intro::after { content: ""; position: absolute; inset: 0; z-index: -1; background: linear-gradient(130deg, rgb(255 255 255 / .065), transparent 42%, rgb(255 255 255 / .02)); pointer-events: none; }
-.house-shop-intro__glow { position: absolute; z-index: -1; width: min(54vw, 34rem); aspect-ratio: 1; top: -70%; right: -5%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 34%, #2b2bff), transparent 68%); filter: blur(12px); pointer-events: none; }
+.house-shop-intro__glow { position: absolute; z-index: -1; width: min(54vw, 34rem); aspect-ratio: 1; top: -70%; right: -5%; border-radius: 50%; background: radial-gradient(circle, color-mix(in oklab, var(--accent) 40%, #5141ff), transparent 68%); filter: blur(12px); pointer-events: none; animation: house-glow-breathe 10s ease-in-out infinite alternate-reverse; }
 .house-shop-filters { min-width: 0; }
 .house-filter-chip:hover { border-color: color-mix(in oklab, var(--accent) 65%, transparent); }
 .house-shop-toolbar { min-height: 3.25rem; }
