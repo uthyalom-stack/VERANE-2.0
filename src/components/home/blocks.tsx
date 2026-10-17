@@ -39,21 +39,17 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
 }
 
 function SplitHero({ data, brands, siteName }: { data: Record<string, unknown>; brands: Awaited<ReturnType<typeof listBrands>>; siteName: string }) {
-  const copy: Record<string, { index: string; mood: string; action: string }> = {
-    uthy: { index: "01", mood: "Quiet confidence. Considered form.", action: "Enter the house" },
-    alomzie: { index: "02", mood: "Make the entrance yours.", action: "Explore the collection" },
-  };
   return (
     <section aria-label={`${siteName} fashion house`} className="house-hero relative">
       <div className="split-hero">
-        {brands.map((b) => {
-          const editorial = copy[b.themeKey] ?? copy.uthy!;
+        {brands.map((b, i) => {
+          const editorial = { index: String(i + 1).padStart(2, "0"), mood: b.description || "Discover the collection.", action: "Explore the collection" };
           return (
             <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className="house-panel group">
               <EditorialImage brandSlug={b.slug} alt={`${b.name} editorial campaign`} priority className="house-panel__image absolute inset-0 opacity-70 transition-transform duration-[1200ms] ease-[var(--ease)] group-hover:scale-105" />
               <div aria-hidden="true" className="house-panel__shade absolute inset-0" />
               <div className="house-panel__meta absolute inset-x-6 top-24 z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-white/75 md:inset-x-10 md:top-28">
-                <span>{siteName} / {editorial.index}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span>
+                <span>{siteName} / {editorial.index}</span><span>{b.tagline || "Explore the collection"}</span>
               </div>
               <div className="house-panel__copy relative z-10 flex h-full min-h-[50svh] flex-col justify-end p-6 pb-10 md:p-10 md:pb-14">
                 <p className="mb-4 text-xs uppercase tracking-[0.2em] text-white/75">{editorial.mood}</p>
@@ -95,7 +91,7 @@ function BrandIntro({ brands, siteName }: { brands: Awaited<ReturnType<typeof li
         {brands.map((b, i) => (
           <Link key={b.id} href={`/brands/${b.slug}`} data-brand={b.themeKey} className={`house-brand-card group relative flex min-h-[22rem] flex-col justify-between overflow-hidden rounded-[var(--r-lg)] border border-white/10 p-6 md:min-h-[30rem] md:p-10 ${i % 2 ? "md:mt-12" : ""}`}>
             <span className="house-brand-card__orb" aria-hidden="true" />
-            <div className="relative z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] opacity-70"><span>{siteName} / 0{i + 1}</span><span>{b.themeKey === "uthy" ? "The art of restraint" : "Unapologetic expression"}</span></div>
+            <div className="relative z-10 flex items-center justify-between text-[10px] uppercase tracking-[0.22em] opacity-70"><span>{siteName} / 0{i + 1}</span><span>{b.tagline || "Discover the collection"}</span></div>
             <div className="relative z-10">
               <h3 className="display max-w-[10ch] text-5xl md:text-7xl">{b.name}</h3>
               <p className="mt-4 max-w-md text-sm leading-relaxed opacity-75">{b.description}</p>
