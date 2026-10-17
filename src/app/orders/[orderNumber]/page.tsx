@@ -29,6 +29,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       <p className="text-sm text-muted">Order</p><h1 className="display text-5xl md:text-7xl">{o.orderNumber}</h1>
       <p className="mt-3 text-lg">{LABEL[o.status] ?? o.status}</p>
       {banner && <p role="status" className={`mt-6 rounded-[var(--r-md)] border border-line p-4 ${banner.tone}`}>{banner.t}</p>}
+      {(o.paymentStatus === "paid" || o.paymentStatus === "refunded") && <div className="mt-4"><ButtonLink href={`/api/orders/${o.orderNumber}/receipt`} variant="outline">Download receipt (PDF)</ButtonLink></div>}
       {o.status === "pending_payment" && <form action={retryPaymentFormAction.bind(null, o.orderNumber)} className="mt-4"><Button type="submit">Pay {formatMoney(o.total, c)}</Button></form>}
       <section className="mt-12"><h2 className="display text-3xl">Items</h2>
         <ul className="mt-4 divide-y divide-line">{items.map((i) => <li key={i.id} className="flex justify-between gap-4 py-4"><span>{i.productName}<span className="block text-sm text-muted">{[i.colorName, i.size && `Size ${i.size}`].filter(Boolean).join(" · ")} × {i.quantity}{i.isPreOrder ? ` · Pre-order${i.fulfillmentTimeSnapshot ? ` · ${i.fulfillmentTimeSnapshot}` : ""}` : ""}{i.customMeasurements ? <span className="block text-xs text-muted">Measurements (cm): {Object.entries(i.customMeasurements).map(([k, v]) => `${k} ${v}`).join(" · ")}</span> : null}</span></span><span>{formatMoney(i.lineTotal, c)}</span></li>)}</ul>
