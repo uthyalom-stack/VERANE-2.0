@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { asc, eq, inArray } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
 import { brands, collectionProducts, collections, products } from "@/infrastructure/db/schema";
 import { assertCan } from "@/domains/authorization";
