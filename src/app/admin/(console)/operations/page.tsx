@@ -50,7 +50,7 @@ export default async function OperationsAdminPage() {
       {tracking.map((c) => <div key={c.id} className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Edit {c.name}</h3><div className="max-w-2xl"><ActionForm action={saveTrackingLinkAction} submitLabel="Save tracking link" hidden={{ id: c.id }} fields={[
         { name: "name", label: "Campaign name", defaultValue: c.name },
         { name: "slug", label: "Short slug", defaultValue: c.slug, hint: "Public link: /go/this-slug" },
-        { name: "brandId", label: "Brand", type: "select", defaultValue: c.brandId ?? "", options: contentBrandOptions },
+        { name: "brandId", label: "Brand", type: "select", required: false, defaultValue: c.brandId ?? "", options: contentBrandOptions },
         { name: "platform", label: "Platform", defaultValue: c.platform, required: false },
         { name: "source", label: "Source", defaultValue: c.source ?? "", required: false },
         { name: "medium", label: "Medium", defaultValue: c.medium ?? "", required: false },
@@ -59,7 +59,7 @@ export default async function OperationsAdminPage() {
       ]} /></div></div>)}
       <div className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Create tracking link</h3><div className="max-w-2xl"><ActionForm action={saveTrackingLinkAction} submitLabel="Create link" fields={[
         { name: "name", label: "Campaign name" }, { name: "slug", label: "Short slug", hint: "Lowercase letters, numbers and hyphens" },
-        { name: "brandId", label: "Brand", type: "select", options: contentBrandOptions }, { name: "platform", label: "Platform", defaultValue: "Instagram", required: false },
+        { name: "brandId", label: "Brand", type: "select", required: false, options: contentBrandOptions }, { name: "platform", label: "Platform", defaultValue: "Instagram", required: false },
         { name: "source", label: "Source", defaultValue: "social", required: false }, { name: "medium", label: "Medium", defaultValue: "social", required: false },
         { name: "destination", label: "On-site destination", defaultValue: "/shop" }, { name: "isActive", label: "Link is active", type: "checkbox", defaultValue: "on" },
       ]} /></div></div>
