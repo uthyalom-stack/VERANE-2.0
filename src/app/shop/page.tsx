@@ -27,7 +27,8 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     return labels[v] ?? v.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
   const activeFilterKeys = ["brand", "type", "style", "occasion", "size", "color", "availability", "sale", "featured"].filter((key) => Boolean(sp[key]));
-  const activeFilterLabel = (key: string) => ({ brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "Sale", featured: "Featured" }[key] ?? key);
+  const activeFilterLabels: Record<string, string> = { brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "Sale", featured: "Featured" };
+  const activeFilterLabel = (key: string) => activeFilterLabels[key] ?? key;
   const group = (label: string, key: string, values: string[]) => values.length === 0 ? null : (
     <fieldset className="house-filter-group mb-7 border-b border-line pb-6"><legend className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</legend>
       <div className="flex flex-wrap gap-2">{values.map((v) => (
