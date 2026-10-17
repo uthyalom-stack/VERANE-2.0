@@ -12,7 +12,7 @@ const label = "block text-sm";
 const submit = "min-h-11 rounded border border-line px-4 text-sm hover:bg-surface";
 export default async function SiteContentAdmin({ searchParams }: { searchParams: Promise<{ saved?: string; error?: string }> }) {
  const { db, actor } = await adminCtx(); assertCan(actor, "content.write", null);
- const [config, about, contact, faq, params, heroMedia] = await Promise.all([getSiteConfig(db), getStaticContent(db,"about"), getStaticContent(db,"contact"), getStaticContent(db,"faq"), searchParams, db.select({ id: mediaAssets.id, altText: mediaAssets.altText, storageKey: mediaAssets.storageKey }).from(mediaAssets).where(eq(mediaAssets.kind, "image")).limit(200), db.select({ id: brands.id, slug: brands.slug, name: brands.name }).from(brands).where(eq(brands.isActive, true))]);
+ const [config, about, contact, faq, params, heroMedia, brandRows] = await Promise.all([getSiteConfig(db), getStaticContent(db,"about"), getStaticContent(db,"contact"), getStaticContent(db,"faq"), searchParams, db.select({ id: mediaAssets.id, altText: mediaAssets.altText, storageKey: mediaAssets.storageKey }).from(mediaAssets).where(eq(mediaAssets.kind, "image")).limit(200), db.select({ id: brands.id, slug: brands.slug, name: brands.name }).from(brands).where(eq(brands.isActive, true))]);
  const s = config.settings, faqLines = (faq.faqs ?? []).map(x => x.question + " | " + x.answer).join("\n");
  return <div><PageHead title="Site content & settings" sub="Edit public pages, navigation, footer, contact details and the announcement bar without a deploy." />
  {params.saved && <p role="status" className="mb-5 rounded border border-line p-3 text-sm">Changes saved.</p>}
