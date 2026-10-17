@@ -3,9 +3,10 @@ import { notFound } from "next/navigation";
 import { adminCtx } from "@/lib/admin";
 import { can } from "@/domains/authorization";
 import { brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, productVariants, products } from "@/infrastructure/db/schema";
-import { PageHead, Panel, Table, Badge, when } from "@/components/admin/ui";
+import { PageHead, Panel, Table, Badge, when, toLocalInput } from "@/components/admin/ui";
+import { listMedia } from "@/domains/media";
 import { ActionForm } from "@/components/ui/action-form";
-import { addCollaborationVariantAction, removeCollaborationVariantAction, saveCollaborationProductAction } from "@/app/actions/admin";
+import { addCollaborationVariantAction, removeCollaborationVariantAction, saveCollaborationAction, saveCollaborationProductAction } from "@/app/actions/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,8 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
     db.select().from(products).where(eq(products.brandId, request.toBrandId)),
     db.select().from(collaborationProducts).where(eq(collaborationProducts.collaborationId, collab.id)).orderBy(desc(collaborationProducts.createdAt)),
   ]);
+  const media = await listMedia(db, actor);
+  const coverOptions: Array<[string, string]> = [["", "— none —"], ...media.filter((m) => m.kind === "image" && (!m.brandId || m.brandId === collab.brandId)).map((m) => [m.id, m.altText ?? m.storageKey] as [string, string])];
   const aName = brandA[0]?.name ?? "Requesting brand";
   const bName = brandB[0]?.name ?? "Partner brand";
   const aOptions: Array<[string, string]> = productsA.filter((p) => p.status !== "archived").map((p) => [p.id, `${p.name} (${p.status})`]);
@@ -43,6 +46,17 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
 
   return <div>
     <PageHead title={collab.title} sub={`${aName} × ${bName} · accepted request · ${collab.status}`} />
+    <Panel title="Collaboration publication">
+      <p className="mb-4 text-sm text-muted">Keep this landing in draft while the product and paired variants are prepared. Publishing is blocked until at least one collaboration product is published.</p>
+      <ActionForm action={saveCollaborationAction} submitLabel="Save collaboration" hidden={{ collaborationId: collab.id }} fields={[
+        { name: "title", label: "Collaboration title", defaultValue: collab.title },
+        { name: "slug", label: "Public URL slug", defaultValue: collab.slug, hint: `Public URL: /collaborations/${collab.slug}` },
+        { name: "description", label: "Introduction", type: "textarea", required: false, defaultValue: collab.description ?? "" },
+        { name: "coverMediaId", label: "Cover image", type: "select", options: coverOptions, defaultValue: collab.coverMediaId ?? "" },
+        { name: "status", label: "Publication status", type: "select", defaultValue: collab.status, options: [["draft", "Draft"], ["scheduled", "Scheduled"], ["published", "Published"], ["archived", "Archived"]] },
+        { name: "publishAt", label: "Publish at (optional)", type: "datetime-local", required: false, defaultValue: toLocalInput(collab.publishAt) },
+      ]} />
+    </Panel>
     <Panel title="Create collaboration product">
       <p className="mb-4 text-sm text-muted">A collaboration product links one catalog item from each brand. Both source products must be published before the collaboration product can be published. Add at least one paired variant before publishing.</p>
       <ActionForm action={saveCollaborationProductAction} submitLabel="Create draft product" fields={[
@@ -66,7 +80,7 @@ export default async function CollaborationDetailPage({ params }: { params: Prom
           { name: "status", label: "Publication", type: "select", defaultValue: cp.status, options: [["draft", "Draft"], ["published", "Publish"], ["archived", "Archive"]] },
         ]} /></div>
         <h4 className="mt-6 text-sm font-medium">Paired variants ({variants.length})</h4>
-        {variants.length ? <Table head={[aName + " variant", bName + " variant", "Added"]} rows={variants.map((v) => [`${v.brandAColor ?? "—"} ${v.brandASize ?? ""}`, `${v.brandBColor ?? "—"} ${v.brandBSize ?? ""}`, when(v.createdAt)])} /> : <p className="mt-2 text-sm text-muted">Add at least one paired variant before publishing.</p>}
+        {variants.length ? <Table head={[aName + " variant", bName + " variant", "Added", "Action"]} rows={variants.map((v) => [`${v.brandAColor ?? "—"} ${v.brandASize ?? ""}`, `${v.brandBColor ?? "—"} ${v.brandBSize ?? ""}`, when(v.createdAt), cp.status !== "published" ? <form key={v.id} action={removeCollaborationVariantAction}><input type="hidden" name="variantId" value={v.id} /><button className="text-xs underline" type="submit">Remove</button></form> : "—"])} /> : <p className="mt-2 text-sm text-muted">Add at least one paired variant before publishing.</p>}
         {cp.status !== "published" && aVariants.length && bVariants.length ? <div className="mt-4 max-w-3xl"><ActionForm action={addCollaborationVariantAction} submitLabel="Add paired variant" hidden={{ collaborationProductId: cp.id }} fields={[
           { name: "brandAVariantId", label: aName + " variant", type: "select", options: aVariants.map((v) => [v.id, `${v.sku} · ${v.colorName ?? ""} ${v.size ?? ""}`]) },
           { name: "brandBVariantId", label: bName + " variant", type: "select", options: bVariants.map((v) => [v.id, `${v.sku} · ${v.colorName ?? ""} ${v.size ?? ""}`]) },
