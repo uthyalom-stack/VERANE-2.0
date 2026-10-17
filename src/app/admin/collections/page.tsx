@@ -26,6 +26,6 @@ export default async function AdminCollectionsPage() {
         <label className="block space-y-1.5 text-sm"><span className="font-medium">Description</span><textarea name="description" rows={3} className="w-full rounded-xl border px-3 py-2.5"/></label>
       </AdminActionForm>
     </section>
-    <section className="mt-8 overflow-hidden rounded-2xl border"><div className="border-b px-5 py-4 font-semibold">Collections ({rows.length})</div><div className="divide-y">{rows.map(({collection:c,brandName})=><div key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><p className="font-medium">{c.title}</p><p className="mt-1 text-xs text-neutral-500">{brandName ?? "House-wide"} · {c.slug}</p></div><span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">{c.status}</span></div>)}</div></section>
+    <section className="mt-8 overflow-hidden rounded-2xl border"><div className="border-b px-5 py-4 font-semibold">Collections ({rows.length})</div><div className="divide-y">{rows.map(({collection:c,brandName})=><div key={c.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><Link href={`/admin/collections/${c.id}`} className="font-medium underline-offset-4 hover:underline">{c.title}</Link><p className="mt-1 text-xs text-neutral-500">{brandName ?? "House-wide"} · {c.slug}</p></div><span className="rounded-full bg-neutral-100 px-3 py-1 text-xs">{c.status}</span></div>)}</div></section>
   </main>;
 }
