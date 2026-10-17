@@ -13,9 +13,15 @@ export default async function AdminOrdersPage() {
   const { actor } = await requireAdmin(); const db = getDb(); const scope = scopedBrandIds(actor,"orders.manage");
   let rows;
   if(scope==="all") rows=await db.select().from(orders).orderBy(desc(orders.createdAt)).limit(100);
+  else if(scope.length===0) rows=[];
   else {
-    const visible=await db.selectDistinct({orderId:orderItems.orderId}).from(orderItems).where(inArray(orderItems.brandId,scope));
-    rows=visible.length?await db.select().from(orders).where(inArray(orders.id,visible.map(v=>v.orderId))).orderBy(desc(orders.createdAt)).limit(100):[];
+    const candidates=await db.selectDistinct({orderId:orderItems.orderId}).from(orderItems).where(inArray(orderItems.brandId,scope));
+    const candidateIds=candidates.map(v=>v.orderId);
+    const allItems=candidateIds.length?await db.select({orderId:orderItems.orderId,brandId:orderItems.brandId}).from(orderItems).where(inArray(orderItems.orderId,candidateIds)):[];
+    const brandsByOrder=new Map<string,Set<string>>();
+    for(const item of allItems){const set=brandsByOrder.get(item.orderId)??new Set<string>();set.add(item.brandId);brandsByOrder.set(item.orderId,set);}
+    const visibleIds=[...brandsByOrder.entries()].filter(([,brandIds])=>[...brandIds].every(id=>scope.includes(id))).map(([id])=>id);
+    rows=visibleIds.length?await db.select().from(orders).where(inArray(orders.id,visibleIds)).orderBy(desc(orders.createdAt)).limit(100):[];
   }
   return <main className="mx-auto max-w-7xl px-5 py-10 sm:px-8"><Link href="/admin" className="text-sm text-neutral-500">← Admin workspace</Link><h1 className="mt-3 text-3xl font-semibold">Orders</h1><p className="mt-2 text-sm text-neutral-600">Status changes are checked server-side against the order lifecycle and every brand in the order.</p>
     <section className="mt-8 overflow-hidden rounded-2xl border"><div className="border-b px-5 py-4 font-semibold">Recent orders ({rows.length})</div><div className="divide-y">{rows.map(o=><div key={o.id} className="grid gap-4 px-5 py-5 lg:grid-cols-[1fr_1fr_2fr] lg:items-center"><div><p className="font-semibold">{o.orderNumber}</p><p className="mt-1 text-sm text-neutral-500">{o.email} · {new Date(o.createdAt).toLocaleString()}</p></div><div><p className="font-medium">{money(o.total)}</p><p className="mt-1 text-xs text-neutral-500">Order: {o.status} · Payment: {o.paymentStatus}</p></div>
