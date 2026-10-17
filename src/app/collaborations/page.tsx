@@ -21,7 +21,7 @@ export default async function CollaborationsPage() {
     const [cover] = collab.coverMediaId ? await db.select().from(mediaAssets).where(eq(mediaAssets.id, collab.coverMediaId)) : [];
     return { collab, brand, from, to, productsRows, a, b, cover };
   }));
-  const visible = cards.filter((c) => c.productsRows.length > 0 && c.from && c.to);
+  const visible = cards.filter((c) => c.productsRows.length > 0 && c.from && c.to && c.a?.status === "published" && c.b?.status === "published");
   return <main className="mx-auto max-w-7xl px-5 pb-24 pt-28 md:px-10">
     <p className="house-kicker">Across the house</p><h1 className="display mt-4 text-6xl md:text-8xl">Collaborations.</h1>
     <p className="mt-5 max-w-xl text-sm leading-relaxed text-muted">A meeting of perspectives from across the VÉRANE house.</p>
