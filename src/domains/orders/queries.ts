@@ -55,6 +55,6 @@ export async function getOrderForAdmin(db: Db, actor: Actor, orderId: string) {
   const brandIds = [...new Set(b.items.map((i) => i.brandId))];
   const allowed = brandIds.filter((id) => actorCan(actor, "orders.read", id));
   if (allowed.length === 0) throw new AppError("FORBIDDEN", "You do not have access to this resource");
-  return { ...b, items: b.items.filter((i) => allowed.includes(i.brandId)), fulfillments: b.fulfillments.filter((f) => allowed.includes(f.brandId)), partial: allowed.length < brandIds.length };
+  return { ...b, items: b.items.filter((i) => allowed.includes(i.brandId)), fulfillments: b.fulfillments.filter((f) => allowed.includes(f.brandId)), shipments: b.shipments.filter((s) => s.brandId ? allowed.includes(s.brandId) : allowed.length === brandIds.length), partial: allowed.length < brandIds.length };
 }
 function actorCan(actor: Actor, perm: "orders.read", brandId: string) { try { assertCan(actor, perm, brandId); return true; } catch { return false; } }
