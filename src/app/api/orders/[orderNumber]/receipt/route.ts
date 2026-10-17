@@ -99,7 +99,7 @@ export async function GET(_: Request, { params }: { params: Promise<{ orderNumbe
     "",
     "Thank you for shopping with VERANE.",
     "Keep this receipt for your records.",
-  ].map((line) => pdfSafe(line));
+  ];
 
   return new Response(makePdf(lines), {
     status: 200,
