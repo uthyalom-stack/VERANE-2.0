@@ -3,8 +3,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { cookies } from "next/headers";
 import { getDb } from "@/infrastructure/db/client";
-import { eq } from "drizzle-orm";
-import { orderAttributions, trackingCampaigns } from "@/infrastructure/db/schema";
+import { and, eq, inArray } from "drizzle-orm";
+import { orderAttributions, pickupLocations, trackingCampaigns } from "@/infrastructure/db/schema";
 import { getEnv } from "@/lib/env";
 import { addToCart, applyDiscountCode, getCartView, setCartQuantity, type CartView } from "@/domains/cart";
 import { startCheckout, checkoutInput } from "@/domains/orders";
@@ -56,7 +56,7 @@ const addressSchema = z.object({
   line1: z.string().trim().min(3).max(200), line2: z.string().max(200).optional(), city: z.string().trim().min(2).max(80),
   state: z.string().trim().min(2).max(80), postalCode: z.string().max(20).optional(),
 });
-export type QuoteOption = { id: string; name: string; carrier: string; eta: string | null; amountMinor: number; total: number };
+export type QuoteOption = { id: string; name: string; carrier: string; eta: string | null; amountMinor: number; total: number; method: "delivery" | "pickup" };
 
 async function quote(form: Record<string, string>) {
   const a = addressSchema.parse(form);
@@ -72,10 +72,19 @@ async function quote(form: Record<string, string>) {
 export async function quoteShippingAction(form: Record<string, string>): Promise<ActionState<{ options: QuoteOption[] }>> {
   return run(async () => {
     const { cartId, options } = await quote(form);
+    const db = getDb();
+    const view = await getCartView(db, cartId, tax());
     const out: QuoteOption[] = [];
     for (const o of options) {
-      const v = await getCartView(getDb(), cartId, { ...tax(), shippingTotal: o.amountMinor });
-      out.push({ id: o.id, name: o.name, carrier: o.carrier, eta: o.etaText, amountMinor: o.amountMinor, total: v.pricing.total });
+      const v = await getCartView(db, cartId, { ...tax(), shippingTotal: o.amountMinor });
+      out.push({ id: o.id, name: o.name, carrier: o.carrier, eta: o.etaText, amountMinor: o.amountMinor, total: v.pricing.total, method: "delivery" });
+    }
+    const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
+    if (brandIds.length === 1) {
+      const locations = await db.select().from(pickupLocations).where(and(eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
+      for (const location of locations) {
+        out.push({ id: `pickup:${location.id}`, name: location.name, carrier: "Pickup", eta: [location.addressLine1, location.addressLine2, location.city, location.state, location.instructions].filter(Boolean).join(", "), amountMinor: 0, total: view.pricing.total, method: "pickup" });
+      }
     }
     return { ok: true, data: { options: out } };
   });
@@ -88,13 +97,25 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
     const optionId = z.string().min(1).parse(form.shippingOptionId);
     const { a, cartId, options } = await quote(form);
     const chosen = options.find((o) => o.id === optionId);
-    if (!chosen) throw new AppError("VALIDATION", "That delivery option is no longer available. Please choose again.");
+    let shipping: { id: string; name: string; amountMinor: number; meta?: Record<string, unknown> };
+    if (optionId.startsWith("pickup:")) {
+      const pickupLocationId = optionId.slice("pickup:".length);
+      const view = await getCartView(getDb(), cartId, tax());
+      const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
+      if (brandIds.length !== 1) throw new AppError("VALIDATION", "Pickup is available only when your bag contains products from one brand");
+      const [location] = await getDb().select().from(pickupLocations).where(and(eq(pickupLocations.id, pickupLocationId), eq(pickupLocations.brandId, brandIds[0]!), eq(pickupLocations.isActive, true)));
+      if (!location) throw new AppError("VALIDATION", "That pickup location is no longer available. Please choose again.");
+      shipping = { id: optionId, name: `Pickup — ${location.name}`, amountMinor: 0, meta: { method: "pickup", pickupLocationId: location.id } };
+    } else {
+      if (!chosen) throw new AppError("VALIDATION", "That delivery option is no longer available. Please choose again.");
+      shipping = { id: chosen.id, name: `${chosen.carrier} — ${chosen.name}`, amountMinor: chosen.amountMinor, meta: { method: "delivery" } };
+    }
     const user = await getCurrentUser();
     const env = getEnv();
     const input = checkoutInput.parse({
       cartId, userId: user?.kind === "customer" ? user.id : null, email: a.email, phone: a.phone,
       address: { recipientName: a.recipientName, line1: a.line1, line2: a.line2, city: a.city, state: a.state, postalCode: a.postalCode, country: "NG" },
-      shipping: { id: chosen.id, name: `${chosen.carrier} — ${chosen.name}`, amountMinor: chosen.amountMinor, meta: chosen.meta },
+      shipping,
       callbackUrl: `${env.APP_URL}/checkout/return`,
     });
     const r = await startCheckout(getDb(), getPaymentProvider(), input, new Date(), { pepper: env.TOKEN_PEPPER, ...tax() });
