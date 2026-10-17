@@ -11,7 +11,8 @@ export default async function CollaborationsPage() {
   const db = getDb();
   const now = new Date();
   const rows = await db.select().from(collaborations).where(or(
-    or(eq(collaborations.status, "published"), and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now))),
+    eq(collaborations.status, "published"),
+    and(eq(collaborations.status, "scheduled"), lte(collaborations.publishAt, now)),
   ));
 
   const cards = await Promise.all(rows.map(async (collab) => {
