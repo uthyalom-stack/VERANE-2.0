@@ -26,7 +26,7 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
           case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} siteName={siteConfig.settings.siteName} />;
           case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "outfit_builder_intro": return <BuilderIntro key={b.id} />;
-          case "newsletter": return <NewsletterSignup key={b.id} />;
+          case "newsletter": return <NewsletterSignup key={b.id} siteName={siteConfig.settings.siteName} />;
           case "collection_feature": return <CollectionFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "look_feature": return <LookFeature key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "editorial_rail": return <EditorialRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
