@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gt, sql } from "drizzle-orm";
+import { and, eq, lte, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb } from "@/infrastructure/db/client";
 import { backInStockSubscriptions, inventoryLevels, products, productVariants } from "@/infrastructure/db/schema";
@@ -39,7 +39,7 @@ export async function subscribeBackInStockAction(input: {
         eq(products.id, parsed.productId),
         eq(productVariants.id, parsed.variantId),
         eq(productVariants.isActive, true),
-        sql`(${products.status} = 'published' OR (${products.status} = 'scheduled' AND ${products.publishAt} <= ${new Date()}))`,
+        or(eq(products.status, "published"), and(eq(products.status, "scheduled"), lte(products.publishAt, new Date()))),
       ));
 
     if (!row) return { ok: false, message: "That product option is no longer available." };
