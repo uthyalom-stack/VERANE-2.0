@@ -33,7 +33,7 @@ export default async function AdminProductsPage() {
             <AdminField label="Slug (optional)" name="slug" hint="Leave blank to generate from the name."/>
             <AdminField label="Price (NGN)" name="basePrice" type="number" required hint="Enter naira, e.g. 25000.00"/>
             <AdminField label="Compare-at price (optional)" name="compareAtPrice" type="number"/>
-            <AdminSelect label="Initial status" name="status" defaultValue="draft" options={[{label:"Draft",value:"draft"},{label:"Published",value:"published"}]}/>
+            <AdminSelect label="Initial status" name="status" defaultValue="draft" options={[{label:"Draft",value:"draft"},{label:"Scheduled",value:"scheduled"},{label:"Published",value:"published"}]}/><AdminField label="Publish date (if scheduled)" name="publishAt" type="datetime-local"/>
             <AdminField label="Product type" name="productType"/>
             <AdminField label="Style" name="style"/>
             <AdminField label="Occasion" name="occasion"/>
