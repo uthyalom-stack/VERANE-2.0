@@ -80,9 +80,12 @@ const [home] = await db.insert(s.pages).values({ kind: "home", slug: "", title: 
 if (home) {
   const blocks = [
     { type: "hero", data: { title: "Two Brands. One Expression.", subtitle: "Two distinct creative worlds. One considered point of view.", ctaLabel: "Discover the house", ctaHref: "/shop", mediaKey: "placeholders/uthy-hero.svg" } },
-    { type: "brand_intro", data: { brandSlugs: ["uthy-luxury", "alomziee-footies"] } },
-    { type: "product_rail", data: { title: "New arrivals", source: "newest", limit: 8 } },
     { type: "outfit_builder_intro", data: {} },
+    { type: "product_rail", data: { title: "New arrivals", source: "newest", limit: 8 } },
+    { type: "product_rail", data: { title: "Trending now", source: "featured", limit: 8 } },
+    { type: "collection_feature", data: { slug: "sample-evening-edit" } },
+    { type: "product_rail", data: { title: "Special price", source: "discounted", limit: 8 } },
+    { type: "brand_intro", data: { brandSlugs: ["uthy-luxury", "alomziee-footies"] } },
     { type: "newsletter", data: {} },
   ];
   for (const [i, b] of blocks.entries()) await db.insert(s.pageBlocks).values({ pageId: home.id, sortOrder: i, type: b.type, data: b.data });
@@ -107,5 +110,5 @@ const [look] = await db.insert(s.looks).values({ brandId: brand.UTHY_LUXURY!.id,
 if (look) for (const [i, p] of uthyProducts.entries()) await db.insert(s.lookItems).values({ lookId: look.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
 await db.insert(s.journalArticles).values({ slug: "sample-two-houses", kind: "brand_story", title: "SAMPLE: Two houses, one expression", excerpt: "Sample story for development.", coverMediaId: media["placeholders/look-2.svg"], status: "published", body: [{ type: "paragraph", text: "This is sample editorial copy." }, { type: "heading", text: "Sample heading" }, { type: "paragraph", text: "Replace via the admin journal editor." }] }).onConflictDoNothing();
 await db.insert(s.discounts).values({ code: "WELCOME10", kind: "percent", value: 10, isActive: true }).onConflictDoNothing();
-for (const pg of home ? [home] : []) { await db.insert(s.pageBlocks).values([{ pageId: pg.id, sortOrder: 5, type: "collection_feature", data: { slug: "sample-evening-edit" } }, { pageId: pg.id, sortOrder: 6, type: "look_feature", data: { slug: "sample-city-after-dark" } }, { pageId: pg.id, sortOrder: 7, type: "editorial_rail", data: { title: "From the Journal", limit: 3 } }]); }
+for (const pg of home ? [home] : []) { await db.insert(s.pageBlocks).values([{ pageId: pg.id, sortOrder: 8, type: "look_feature", data: { slug: "sample-city-after-dark" } }, { pageId: pg.id, sortOrder: 9, type: "editorial_rail", data: { title: "From the Journal", limit: 3 } }]); }
 console.log("Seed complete (sample data). Dev admins: super@/uthy@/alomzie@verane.local — password from SEED_ADMIN_PASSWORD.");
