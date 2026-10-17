@@ -101,7 +101,7 @@ export default async function OperationsAdminPage() {
     </Panel> : null}
 
     {pickupBrands.length > 0 ? <Panel title="Customer pickup locations">
-      <p className="mb-4 text-sm text-muted">These are per-brand pickup locations. Active locations are offered at checkout for single-brand bags; multi-brand orders use delivery and receive separate fulfilment records for each brand.</p>
+      <p className="mb-4 text-sm text-muted">These are per-brand pickup locations. Customers choose delivery or pickup independently for each brand in a multi-brand bag, and each brand receives its own fulfilment record.</p>
       <Table head={["Location", "Brand", "Address", "Status"]} rows={pickups.map((p) => [p.name, brandNames.get(p.brandId) ?? p.brandId, [p.addressLine1, p.city, p.state].join(", "), <Badge key="status" tone={p.isActive ? "ok" : "warn"}>{p.isActive ? "Active" : "Disabled"}</Badge>])} empty="No pickup locations configured." />
       {pickups.map((p) => <div key={p.id} className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Edit {p.name}</h3><div className="max-w-2xl"><ActionForm action={savePickupLocationAction} submitLabel="Save pickup location" hidden={{ id: p.id }} fields={[
         { name: "brandId", label: "Brand", type: "select", defaultValue: p.brandId, options: pickupBrandOptions }, { name: "name", label: "Location name", defaultValue: p.name },
