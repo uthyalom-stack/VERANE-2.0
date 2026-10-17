@@ -21,6 +21,7 @@ export async function listShopProducts(db: Db, rawQuery: unknown, now = new Date
   if (q.occasion) where.push(eq(products.occasion, q.occasion));
   if (q.type) where.push(eq(products.productType, q.type));
   if (q.featured) where.push(eq(products.isFeatured, true));
+  if (q.sale) where.push(sql`${products.compareAtPrice} > ${products.basePrice}`);
   const variantConds: SQL[] = [eq(productVariants.productId, products.id), eq(productVariants.isActive, true)];
   if (q.size) variantConds.push(eq(productVariants.size, q.size));
   if (q.color) variantConds.push(eq(productVariants.colorName, q.color));
