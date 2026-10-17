@@ -18,7 +18,7 @@ INNER JOIN `orders` o ON o.`id` = oi.`order_id`
 WHERE NOT EXISTS (
   SELECT 1 FROM `order_brand_fulfilments` f
   WHERE f.`order_id` = oi.`order_id` AND f.`brand_id` = oi.`brand_id`
-);
+);--> statement-breakpoint
 UPDATE `shipping_records`
 SET `brand_id` = (
   SELECT MIN(oi.`brand_id`) FROM `order_items` oi WHERE oi.`order_id` = `shipping_records`.`order_id`
