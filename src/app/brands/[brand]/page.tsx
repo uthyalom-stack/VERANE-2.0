@@ -53,7 +53,7 @@ export default async function BrandPage({ params }: P) {
       </section>
       {blocks.length > 0 && <HomeBlocks db={db} blocks={blocks} brandSlug={b.slug} />}
       <section className="mx-auto max-w-[1600px] px-5 pb-24 pt-8 md:px-10">
-        <div className="house-section-heading mb-10 flex items-end justify-between gap-4"><div><p className="house-kicker">{uthy ? "Quietly considered" : "New energy"}</p><h2 className="display mt-3 text-4xl md:text-6xl">{uthy ? "The collection" : "Fresh drops"}</h2></div><span className="glass rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.15em]">{b.name}</span></div>
+        <div className="house-section-heading mb-10 flex items-end justify-between gap-4"><div><p className="house-kicker">{b.tagline || "Explore the collection"}</p><h2 className="display mt-3 text-4xl md:text-6xl">Shop the collection</h2></div><span className="glass rounded-full px-4 py-2 text-[10px] uppercase tracking-[0.15em]">{b.name}</span></div>
         {cards.length === 0 ? <EmptyState title="Nothing published yet">New pieces from {b.name} will appear here.</EmptyState> : <div className="grid grid-cols-2 gap-x-4 gap-y-10 lg:grid-cols-4">{cards.map((c) => <ProductCard key={c.product.id} item={c} />)}</div>}
       </section>
     </div>
