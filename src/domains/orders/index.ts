@@ -36,9 +36,46 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
   if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable. Review your bag to continue.");
   if (view.discountError) throw new AppError("VALIDATION", view.discountError);
   const brandIds = [...new Set(view.lines.map((line) => line.brandId))];
-  const fulfillmentMethod = input.shipping.meta?.method === "pickup" ? "pickup" : "delivery";
+  const method = input.shipping.meta?.method;
+  const fulfillmentMethod = method === "pickup" ? "pickup" : "delivery";
   let pickupLocation: typeof pickupLocations.$inferSelect | null = null;
-  if (fulfillmentMethod === "pickup") {
+  const perBrandSchema = z.array(z.object({
+    brandId: z.string().min(1),
+    method: z.enum(["delivery", "pickup"]),
+    id: z.string().min(1),
+    name: z.string().min(1),
+    amountMinor: z.number().int().min(0),
+    pickupLocationId: z.string().optional(),
+  }));
+  const perBrandSelections = method === "per_brand" ? perBrandSchema.parse(input.shipping.meta?.brandSelections) : null;
+  const pickupByBrand = new Map<string, typeof pickupLocations.$inferSelect>();
+
+  if (perBrandSelections) {
+    if (perBrandSelections.length !== brandIds.length || new Set(perBrandSelections.map((selection) => selection.brandId)).size !== brandIds.length ||
+        brandIds.some((brandId) => !perBrandSelections.some((selection) => selection.brandId === brandId))) {
+      throw new AppError("VALIDATION", "Choose exactly one fulfilment option for every brand in the order");
+    }
+    const selectedTotal = perBrandSelections.reduce((sum, selection) => sum + selection.amountMinor, 0);
+    if (!Number.isSafeInteger(selectedTotal) || selectedTotal !== input.shipping.amountMinor) {
+      throw new AppError("VALIDATION", "Brand fulfilment totals do not match the shipping amount");
+    }
+    for (const selection of perBrandSelections) {
+      if (selection.method === "pickup") {
+        if (selection.amountMinor !== 0 || !selection.pickupLocationId || selection.id !== `pickup:${selection.pickupLocationId}`) {
+          throw new AppError("VALIDATION", "Invalid pickup selection");
+        }
+        const [location] = await db.select().from(pickupLocations).where(and(
+          eq(pickupLocations.id, selection.pickupLocationId),
+          eq(pickupLocations.brandId, selection.brandId),
+          eq(pickupLocations.isActive, true),
+        ));
+        if (!location) throw new AppError("VALIDATION", "A selected pickup location is no longer available");
+        pickupByBrand.set(selection.brandId, location);
+      } else if (selection.pickupLocationId || selection.id.startsWith("pickup:")) {
+        throw new AppError("VALIDATION", "Invalid delivery selection");
+      }
+    }
+  } else if (fulfillmentMethod === "pickup") {
     if (brandIds.length !== 1 || input.shipping.amountMinor !== 0) throw new AppError("VALIDATION", "Pickup is available only for a single-brand order and has no delivery fee");
     const pickupLocationId = input.shipping.meta?.pickupLocationId;
     if (typeof pickupLocationId !== "string") throw new AppError("VALIDATION", "Choose a pickup location");
@@ -64,7 +101,20 @@ export async function startCheckout(db: Db, provider: PaymentProvider, raw: unkn
         discountCode: cart?.discountCode ?? null, shippingAddressJson: input.address, shippingOptionJson: input.shipping, reservationExpiresAt: new Date(now.getTime() + RESERVATION_MS), cartId: input.cartId, publicTokenHash: await sha256Hex(publicToken, pepper),
       });
       for (const l of view.lines) await tx.insert(orderItems).values({ orderId, productId: l.productId, variantId: l.variantId, brandId: l.brandId, productName: l.name, sku: l.sku, size: l.size, colorName: l.colorName, customMeasurements: l.customMeasurements, isPreOrder: l.isPreOrder, unitPrice: l.unitPrice, quantity: l.quantity, lineTotal: l.lineTotal, fulfillmentTimeSnapshot: l.isPreOrder ? l.fulfillmentTime : null });
-      for (const brandId of brandIds) await tx.insert(orderBrandFulfilments).values({ id: crypto.randomUUID(), orderId, brandId, method: fulfillmentMethod, status: "unfulfilled", pickupLocationId: fulfillmentMethod === "pickup" ? pickupLocation!.id : null, pickupLocationSnapshot: fulfillmentMethod === "pickup" ? JSON.stringify({ name: pickupLocation!.name, addressLine1: pickupLocation!.addressLine1, addressLine2: pickupLocation!.addressLine2, city: pickupLocation!.city, state: pickupLocation!.state, postalCode: pickupLocation!.postalCode, country: pickupLocation!.country, instructions: pickupLocation!.instructions }) : null });
+      for (const brandId of brandIds) {
+        const selection = perBrandSelections?.find((candidate) => candidate.brandId === brandId);
+        const selectedMethod = selection?.method ?? fulfillmentMethod;
+        const selectedPickup = selection?.method === "pickup" ? pickupByBrand.get(brandId) : pickupLocation;
+        await tx.insert(orderBrandFulfilments).values({
+          id: crypto.randomUUID(), orderId, brandId, method: selectedMethod, status: "unfulfilled",
+          pickupLocationId: selectedMethod === "pickup" ? selectedPickup!.id : null,
+          pickupLocationSnapshot: selectedMethod === "pickup" ? JSON.stringify({
+            name: selectedPickup!.name, addressLine1: selectedPickup!.addressLine1, addressLine2: selectedPickup!.addressLine2,
+            city: selectedPickup!.city, state: selectedPickup!.state, postalCode: selectedPickup!.postalCode,
+            country: selectedPickup!.country, instructions: selectedPickup!.instructions,
+          }) : null,
+        });
+      }
       await tx.insert(paymentAttempts).values({ orderId, provider: provider.name, reference, amount: p.total, currency: view.currency });
       await tx.insert(orderStatusHistory).values({ orderId, fromStatus: null, toStatus: "pending_payment", note: "Order created" });
     });
