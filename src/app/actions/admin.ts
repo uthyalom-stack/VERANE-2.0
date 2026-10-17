@@ -280,7 +280,21 @@ export async function saveCollaborationAction(_: ActionState, f: FormData): Prom
     }
     if (status === "published") {
       const published = await db.select().from(collaborationProducts).where(and(eq(collaborationProducts.collaborationId, collab.id), eq(collaborationProducts.status, "published")));
-      if (!published.length) throw new AppError("CONFLICT", "Publish at least one collaboration product before publishing the landing page");
+      let hasPublicProduct = false;
+      for (const item of published) {
+        const [a] = await db.select().from(products).where(and(eq(products.id, item.brandAProductId), eq(products.status, "published")));
+        const [b] = await db.select().from(products).where(and(eq(products.id, item.brandBProductId), eq(products.status, "published")));
+        if (!a || !b) continue;
+        const pairs = await db.select().from(collaborationProductVariants).where(eq(collaborationProductVariants.collaborationProductId, item.id));
+        for (const pair of pairs) {
+          if (!pair.brandAVariantId || !pair.brandBVariantId) continue;
+          const [av] = await db.select().from(productVariants).where(and(eq(productVariants.id, pair.brandAVariantId), eq(productVariants.productId, a.id), eq(productVariants.isActive, true)));
+          const [bv] = await db.select().from(productVariants).where(and(eq(productVariants.id, pair.brandBVariantId), eq(productVariants.productId, b.id), eq(productVariants.isActive, true)));
+          if (av && bv) { hasPublicProduct = true; break; }
+        }
+        if (hasPublicProduct) break;
+      }
+      if (!hasPublicProduct) throw new AppError("CONFLICT", "Publish at least one collaboration product with active paired variants and two published source products before publishing the landing page");
     }
     const publishAt = r.publishAt?.trim() ? new Date(r.publishAt) : null;
     if (publishAt && Number.isNaN(publishAt.getTime())) throw new AppError("VALIDATION", "Enter a valid publication date");
