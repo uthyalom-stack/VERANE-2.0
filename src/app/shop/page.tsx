@@ -17,10 +17,15 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
   const [{ items, hasMore, query }, facets] = await Promise.all([listShopProducts(db, sp), listAvailableFacets(db)]);
   const cards = await toCardData(db, items);
   const href = (patch: Record<string, string | undefined>) => {
-    const u = new URLSearchParams({ ...sp, ...patch } as Record<string, string>);
-    for (const [k, v] of [...u]) if (!v) u.delete(k);
+    const u = new URLSearchParams();
+    for (const [key, value] of Object.entries(sp)) if (value) u.set(key, value);
+    for (const [key, value] of Object.entries(patch)) {
+      if (value === undefined || value === "") u.delete(key);
+      else u.set(key, value);
+    }
     if (!("page" in patch)) u.delete("page");
-    return `/shop?${u}`;
+    const queryString = u.toString();
+    return queryString ? `/shop?${queryString}` : "/shop";
   };
   const pretty = (v: string) => {
     const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock" };
