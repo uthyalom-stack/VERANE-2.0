@@ -90,6 +90,16 @@ if (home) {
 // ---- sample editorial/commerce content (clearly SAMPLE) ----
 const media = Object.fromEntries((await db.select().from(s.mediaAssets)).map((m) => [m.storageKey, m.id]));
 const allProducts = await db.select().from(s.products);
+// Attach clearly-labelled development artwork so seeded catalog cards and product pages
+// exercise the complete media path instead of rendering empty image wells.
+for (const p of allProducts.filter((row) => row.name.startsWith("SAMPLE "))) {
+  const [existingMedia] = await db.select().from(s.productMedia).where(eq(s.productMedia.productId, p.id)).limit(1);
+  if (existingMedia) continue;
+  const [brandRow] = await db.select().from(s.brands).where(eq(s.brands.id, p.brandId));
+  const storageKey = brandRow?.themeKey === "uthy" ? "placeholders/product-1.svg" : "placeholders/product-2.svg";
+  const mediaId = media[storageKey];
+  if (mediaId) await db.insert(s.productMedia).values({ productId: p.id, mediaId, role: "primary", sortOrder: 0 });
+}
 const uthyProducts = allProducts.filter((p) => p.brandId === brand.UTHY_LUXURY!.id);
 const [col] = await db.insert(s.collections).values({ brandId: brand.UTHY_LUXURY!.id, slug: "sample-evening-edit", title: "SAMPLE Evening Edit", description: "Sample collection for development.", heroMediaId: media["placeholders/look-1.svg"], status: "published", isFeatured: true }).onConflictDoNothing().returning();
 if (col) for (const [i, p] of uthyProducts.entries()) await db.insert(s.collectionProducts).values({ collectionId: col.id, productId: p.id, sortOrder: i }).onConflictDoNothing();
