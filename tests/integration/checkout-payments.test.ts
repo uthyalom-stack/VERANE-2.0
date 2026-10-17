@@ -109,6 +109,25 @@ describe("pickup checkout", () => {
     expect(savedOrder!.shippingTotal).toBe(0);
   });
 
+  it("creates independent delivery fulfilment records for a multi-brand order", async () => {
+    const { id: uthyProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Brand A Jacket", basePrice: 1250000, status: "published", variants: [{ sku: "BRANDA-1", size: "M", initialStock: 2 }] });
+    const { id: aloProductId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.alo.id, name: "Brand B Footie", basePrice: 950000, status: "published", variants: [{ sku: "BRANDB-1", size: "42", initialStock: 2 }] });
+    const [variantA] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, uthyProductId));
+    const [variantB] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, aloProductId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variantA!.id, 1);
+    await addToCart(ctx.db, cart.id, variantB!.id, 1);
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "multi-brand@example.com", phone: "08012345678", address,
+      shipping: { id: "courier-standard", name: "Courier — Standard", amountMinor: 2500, meta: { method: "delivery" } },
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const fulfilments = await ctx.db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.orderId));
+    expect(fulfilments).toHaveLength(2);
+    expect(fulfilments.map((row) => row.brandId).sort()).toEqual([a.alo.id, a.uthy.id].sort());
+    expect(fulfilments.every((row) => row.method === "delivery" && row.status === "unfulfilled")).toBe(true);
+  });
+
   it("rejects a pickup location that belongs to a different brand", async () => {
     const { id: productId } = await createProduct(ctx.db, a.superAdmin, { brandId: a.uthy.id, name: "Pickup Sandal", basePrice: 650000, status: "published", variants: [{ sku: "PICK-2", size: "40", initialStock: 2 }] });
     const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
