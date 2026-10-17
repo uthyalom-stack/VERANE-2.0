@@ -21,11 +21,14 @@ import { trackServer } from "@/lib/http/track";
 const tax = () => { const e = getEnv(); return { taxBps: e.TAX_BPS, taxInclusive: e.TAX_INCLUSIVE === "true" }; };
 const qty = z.coerce.number().int().min(0).max(99);
 
-export async function addToBagAction(variantId: string, quantity: number): Promise<ActionState<{ count: number }>> {
+const measurementsSchema = z.object({ chest: z.number().min(20).max(250), waist: z.number().min(20).max(250), hips: z.number().min(20).max(250), length: z.number().min(20).max(250), shoulder: z.number().min(10).max(150).optional(), sleeve: z.number().min(10).max(150).optional(), inseam: z.number().min(10).max(150).optional() }).strict();
+
+export async function addToBagAction(variantId: string, quantity: number, rawMeasurements?: unknown): Promise<ActionState<{ count: number }>> {
   return run(async () => {
     const id = z.string().min(1).max(64).parse(variantId); const q = qty.parse(quantity);
     const cartId = await ensureCartId();
-    await addToCart(getDb(), cartId, id, Math.max(1, q));
+    const measurements = rawMeasurements == null ? undefined : measurementsSchema.parse(rawMeasurements);
+    await addToCart(getDb(), cartId, id, Math.max(1, q), measurements);
     const v = await getCartView(getDb(), cartId);
     void trackServer({ name: "add_to_cart", entityType: "variant", entityId: id, props: { qty: Math.max(1, q) } });
     return { ok: true, message: "Added to your bag", data: { count: v.lines.reduce((n, l) => n + l.quantity, 0) } };
