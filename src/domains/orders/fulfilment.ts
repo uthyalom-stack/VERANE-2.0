@@ -36,7 +36,7 @@ export async function createShipmentForOrder(db: Db, provider: ShippingProvider,
   await writeAudit(db, { actorUserId: actor.userId, action: "order.shipment.create", entityType: "order", entityId: orderId, after: made });
 }
 
-const ORDER_FLOW: Record<string, string[]> = { paid: ["processing", "cancelled"], processing: ["shipped", "cancelled"], shipped: ["delivered"], delivered: ["refunded"] };
+const ORDER_FLOW: Record<string, string[]> = { paid: ["processing", "cancelled"], processing: ["shipped", "delivered", "cancelled"], shipped: ["delivered"], delivered: ["refunded"] };
 export async function setOrderStatus(db: Db, orderId: string, to: string, note: string, actorUserId: string | null) {
   const [o] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!o) throw new AppError("NOT_FOUND", "Order not found");
