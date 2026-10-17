@@ -23,7 +23,7 @@ export async function HomeBlocks({ db, blocks, brandSlug }: { db: Db; blocks: Bl
         switch (b.type) {
           case "campaign_hero": return brandSlug ? null : <CampaignHero key={b.id} db={db} data={b.data} />;
           case "hero": return brandSlug ? null : <SplitHero key={b.id} data={b.data} brands={brands} siteName={siteConfig.settings.siteName} />;
-          case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} />;
+          case "brand_intro": return brandSlug ? null : <BrandIntro key={b.id} brands={brands} siteName={siteConfig.settings.siteName} />;
           case "product_rail": return <ProductRail key={b.id} db={db} data={b.data} brandSlug={brandSlug} />;
           case "outfit_builder_intro": return <BuilderIntro key={b.id} />;
           case "newsletter": return <NewsletterSignup key={b.id} />;
@@ -84,7 +84,7 @@ function SplitHero({ data, brands, siteName }: { data: Record<string, unknown>; 
     </section>
   );
 }
-function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>> }) {
+function BrandIntro({ brands, siteName }: { brands: Awaited<ReturnType<typeof listBrands>>; siteName: string }) {
   return (
     <section className="house-brand-intro mx-auto mt-28 max-w-[1600px] px-5 md:px-10">
       <div className="mb-10 flex flex-col gap-4 md:mb-14 md:flex-row md:items-end md:justify-between">
