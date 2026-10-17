@@ -18,8 +18,10 @@ export async function listCollections(db: Db, now = new Date()) {
   return rows.map((c) => ({ collection: c, hero: c.heroMediaId ? m.get(c.heroMediaId) ?? null : null, brand: c.brandId ? bs.get(c.brandId) ?? null : null }));
 }
 
-export async function getCollection(db: Db, slug: string, now = new Date()) {
-  const [c] = await db.select().from(collections).where(and(eq(collections.slug, slug), live(collections, now)));
+export async function getCollection(db: Db, slug: string, now = new Date(), brandSlug?: string) {
+  const where = [eq(collections.slug, slug), live(collections, now)];
+  if (brandSlug) { const [brand] = await db.select().from(brands).where(eq(brands.slug, brandSlug)); if (!brand) return null; where.push(eq(collections.brandId, brand.id)); }
+  const [c] = await db.select().from(collections).where(and(...where));
   if (!c) return null;
   const rows = await db.select({ p: products }).from(collectionProducts).innerJoin(products, eq(products.id, collectionProducts.productId))
     .where(and(eq(collectionProducts.collectionId, c.id), publiclyVisible(now))).orderBy(asc(collectionProducts.sortOrder));
@@ -58,6 +60,7 @@ export async function getLook(db: Db, slug: string, now = new Date()) {
 export async function listArticles(db: Db, opts: { kind?: string; brandSlug?: string; limit?: number } = {}, now = new Date()) {
   const where = [live(journalArticles, now)];
   if (opts.kind) where.push(eq(journalArticles.kind, opts.kind as never));
+  if (opts.brandSlug) { const [brand] = await db.select().from(brands).where(eq(brands.slug, opts.brandSlug)); if (!brand) return []; where.push(eq(journalArticles.brandId, brand.id)); }
   const rows = await db.select().from(journalArticles).where(and(...where)).orderBy(desc(journalArticles.publishAt), desc(journalArticles.createdAt)).limit(Math.min(opts.limit ?? 30, 60));
   const m = await media(db, rows.map((r) => r.coverMediaId));
   return rows.map((a) => ({ article: a, cover: a.coverMediaId ? m.get(a.coverMediaId) ?? null : null }));
