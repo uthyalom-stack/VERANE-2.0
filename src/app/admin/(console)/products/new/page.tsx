@@ -9,6 +9,6 @@ export default async function NewProduct() {
   const { db, actor } = await adminCtx();
   const [brandRows, categoryRows, media] = await Promise.all([db.select().from(brands), db.select().from(categories), listMedia(db, actor)]);
   const bs = brandRows.filter((b) => can(actor, "catalog.product.write", b.id));
-  const mediaOptions: Array<[string, string]> = media.filter((m) => m.kind === "image").map((m) => [m.id, `${m.altText ?? m.storageKey}`]);
+  const mediaOptions: Array<[string, string]> = media.filter((m) => m.kind === "image" && (!m.brandId || bs.some((b) => b.id === m.brandId))).map((m) => [m.id, `${m.altText ?? m.storageKey}`]);
   return (<div><PageHead title="New product" sub="Add variants, stock and media after the product is created." /><div className="max-w-2xl"><ProductForm brands={bs} categories={categoryRows} selectedCategoryIds={[]} mediaOptions={mediaOptions} /></div></div>);
 }
