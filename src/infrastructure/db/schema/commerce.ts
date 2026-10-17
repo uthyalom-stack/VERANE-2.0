@@ -143,6 +143,8 @@ export const orderItems = sqliteTable(
     sku: text().notNull(),
     size: text(),
     colorName: text(),
+    customMeasurements: text({ mode: "json" }).$type<Record<string, number>>(),
+    isPreOrder: integer({ mode: "boolean" }).notNull().default(false),
     unitPrice: money().notNull(),
     quantity: integer().notNull(),
     lineTotal: money().notNull(),
