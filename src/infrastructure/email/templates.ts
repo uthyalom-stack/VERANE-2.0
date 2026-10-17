@@ -24,5 +24,10 @@ export const templates = {
     return { to, subject: `Order ${d.orderNumber} confirmed — payment received`, html: shell("Thank you. Your order is confirmed.", `Order ${d.orderNumber}. We've received your payment and are preparing your pieces.`, rows, { label: "View order", url: d.url }), text: strip([`Order ${d.orderNumber} confirmed. Payment received.`, ...d.items.map((i) => `${i.name} x${i.qty}  ${formatMoney(i.line, d.currency)}`), `Total ${formatMoney(d.total, d.currency)}`, d.url]) };
   },
   shippingUpdate: (to: string, d: { orderNumber: string; status: string; trackingUrl: string | null; url: string }): EmailMessage => ({ to, subject: `Order ${d.orderNumber}: ${d.status}`, html: shell(`Your order is ${d.status.toLowerCase()}`, `Order ${d.orderNumber} has a new delivery update.`, "", { label: d.trackingUrl ? "Track delivery" : "View order", url: d.trackingUrl ?? d.url }), text: strip([`Order ${d.orderNumber}: ${d.status}`, d.trackingUrl ?? d.url]) }),
+  backInStock: (to: string, d: { productName: string; url: string }): EmailMessage => ({
+    to, subject: `Back in stock: ${d.productName} — VÉRANE`,
+    html: shell("It's back.", `${d.productName} is available again. Stock can change quickly, so visit the piece if you'd still like it.`, "", { label: "Shop the piece", url }, "You are receiving this because you asked to be notified when this item returned."),
+    text: [`${d.productName} is back in stock.`, d.url, "You are receiving this because you requested a restock notification."].join("\\n"),
+  }),
   adminNewOrder: (to: string, d: { orderNumber: string; total: number; currency: string; url: string }): EmailMessage => ({ to, subject: `New paid order ${d.orderNumber}`, html: shell("New paid order", `${d.orderNumber} — ${formatMoney(d.total, d.currency)}`, "", { label: "Open in admin", url: d.url }, "Administrator notification."), text: `New paid order ${d.orderNumber} (${formatMoney(d.total, d.currency)})\n${d.url}` }),
 };
