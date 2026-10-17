@@ -6,7 +6,7 @@ import { cn } from "@/lib/cn";
  * Sources and license notes live in docs/EDITORIAL_ASSETS.md.
  */
 export const HOUSE_EDITORIAL_IMAGES = {
-  uthy: "https://images.unsplash.com/photo-1776273920158-510b171e936f?auto=format&fit=crop&fm=jpg&q=82&w=1800",
+  uthy: "https://images.unsplash.com/photo-1776273920158-510b171e936f?auto=format&fit=crop&fm=jpg&q=78&w=1600",
   alomzie: "https://images.unsplash.com/photo-1777899051916-067557782b78?auto=format&fit=crop&fm=jpg&q=82&w=1800",
 } as const;
 
