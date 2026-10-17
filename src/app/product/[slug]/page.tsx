@@ -11,6 +11,7 @@ import { getCurrentUser } from "@/lib/http/session";
 import { Media } from "@/components/ui/media";
 import { ProductCard } from "@/components/commerce/product-card";
 import { PurchasePanel } from "@/components/commerce/purchase-panel";
+import { BackInStockForm } from "@/components/commerce/back-in-stock-form";
 import { ProductGallery } from "@/components/commerce/product-gallery";
 import { mediaUrl } from "@/infrastructure/storage";
 import { getEnv } from "@/lib/env";
@@ -58,6 +59,7 @@ export default async function ProductPage({ params, searchParams }: P) {
           <p className="house-kicker mt-7">{b.name} / The piece</p>
           <h1 className="display mt-3 text-5xl md:text-6xl">{p.name}</h1>{p.subtitle && <p className="mt-4 max-w-lg leading-relaxed text-muted">{p.subtitle}</p>}
           <PurchasePanel productId={p.id} productName={p.name} currency={p.currency} signedIn={!!customer} wished={wished} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName, colorHex: v.colorHex, unitPrice: v.unitPrice, available: v.available, allowBackorder: v.allowBackorder }))} />
+          {!inStock && variants.length > 0 && <BackInStockForm productId={p.id} variants={variants.map((v) => ({ id: v.id, size: v.size, colorName: v.colorName }))} />}
           <div className="house-product-details mt-10 divide-y divide-line border-y border-line">{p.description && <p className="py-6 text-sm leading-relaxed">{p.description}</p>}
             {details.filter(([, v]) => v).map(([k, v]) => <details key={k} className="group py-4"><summary className="flex cursor-pointer list-none justify-between text-sm">{k}<span aria-hidden className="transition-transform group-open:rotate-45">+</span></summary><p className="mt-3 text-sm text-muted">{v}</p></details>)}</div>
         </div>
