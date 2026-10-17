@@ -12,7 +12,7 @@ const sections = [
   { href: "/admin/brands", title: "Brands", description: "Update the two house brand profiles and active status.", permission: "brands.write" },
   { href: "/admin/media", title: "Media library", description: "Review media assets and update alt text.", permission: "media.write" },
   { href: "/admin/content", title: "Editorial content", description: "Campaigns, looks, journal stories and page blocks.", permission: "content.write" },
-  { href: "/admin/discounts", title: "Discounts", description: "Manage discount codes and redemption rules.", permission: "discounts.manage" },
+  { href: "/admin/discounts", title: "Discounts", description: "Manage discount codes and redemption rules.", permission: "discounts.write" },
   { href: "/admin/analytics", title: "Analytics", description: "Review event totals for the permitted brand scope.", permission: "analytics.read" },
   { href: "/admin/newsletter", title: "Newsletter", description: "Review marketing subscribers within your brand scope.", permission: "newsletter.read" },
   { href: "/admin/audit", title: "Audit log", description: "Review recorded administrative and commerce changes.", permission: "audit.read" },
