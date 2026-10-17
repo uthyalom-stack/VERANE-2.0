@@ -44,7 +44,7 @@ export default async function ProductPage({ params, searchParams }: P) {
   const inStock = variants.some((v) => v.available > 0 || v.allowBackorder || p.preOrderEnabled);
   const jsonLd = [
     { "@context": "https://schema.org", "@type": "Product", name: p.name, description: p.description ?? undefined, brand: { "@type": "Brand", name: b.name }, sku: variants[0]?.sku, image: media.filter((m) => m.m.kind === "image").map((m) => mediaUrl(m.m.storageKey)),
-      offers: { "@type": "Offer", priceCurrency: p.currency, price: (p.basePrice / 100).toFixed(2), availability: inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: `${base}/product/${p.slug}?brand=${b.slug}` } },
+      offers: { "@type": "Offer", priceCurrency: p.currency, price: (p.basePrice / 100).toFixed(2), availability: p.preOrderEnabled && variants.every((v) => v.available <= 0 && !v.allowBackorder) ? "https://schema.org/PreOrder" : inStock ? "https://schema.org/InStock" : "https://schema.org/OutOfStock", url: `${base}/product/${p.slug}?brand=${b.slug}` } },
     { "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [{ "@type": "ListItem", position: 1, name: "Shop", item: `${base}/shop` }, { "@type": "ListItem", position: 2, name: b.name, item: `${base}/brands/${b.slug}` }, { "@type": "ListItem", position: 3, name: p.name }] },
   ];
   const details: Array<[string, string | null]> = [["Materials", p.materials], ["Fit", p.fit], ["Sizing", p.sizingInfo], ["Care", p.careInstructions], ["Delivery", p.deliveryInfo]];
