@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { requireAdmin } from "@/lib/http/session";
+import { logoutAction } from "@/app/actions/auth";
 
 const sections = [
   { href: "/admin/products", title: "Products", description: "Product details, pricing, variants, publication and media.", permission: "catalog.product.write" },
@@ -30,7 +31,7 @@ export default async function AdminPage() {
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">Admin workspace</h1>
           <p className="mt-2 text-sm text-neutral-600">Signed in as {user.name} · {user.email}</p>
         </div>
-        <Link href="/" className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">View storefront</Link>
+        <div className="flex gap-2"><Link href="/" className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">View storefront</Link><form action={logoutAction}><button className="rounded-full border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50">Sign out</button></form></div>
       </div>
       <section className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         {allowed.map((section) => (
