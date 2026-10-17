@@ -9,6 +9,7 @@ import { PageHead, Panel, Table } from "@/components/admin/ui";
 export default async function Analytics({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { db, actor } = await adminCtx();
   const params = await searchParams;
+  // eslint-disable-next-line react-hooks/purity -- server-rendered analytics intentionally uses the request-time date window
   const now = new Date();
   const today = now.toISOString().slice(0, 10);
   const defaultFrom = new Date(now.getTime() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
