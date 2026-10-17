@@ -471,7 +471,7 @@ export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): 
       const [latestOrder] = await db.select().from(orders).where(eq(orders.id, order.id));
       if (latestOrder?.status === "paid") await setOrderStatus(db, order.id, "processing", "All fulfilments completed", actor.userId);
       const [beforeDelivered] = await db.select().from(orders).where(eq(orders.id, order.id));
-      if (beforeDelivered && beforeDelivered.status !== "delivered") await setOrderStatus(db, order.id, "delivered", "All brand fulfilments completed", actor.userId);
+      if (beforeDelivered && beforeDelivered.status !== "delivered") await setOrderStatus(db, order.id, "delivered", "All brand fulfilments completed", actor.userId, { allowFulfilmentCompletion: true });
     }
     await writeAudit(db, { actorUserId: actor.userId, action: "order.brand_fulfilment.update", entityType: "order", entityId: fulfilment.orderId, brandId: fulfilment.brandId, before: { status: fulfilment.status }, after: { status: next, method: fulfilment.method } });
     revalidatePath(`/admin/orders/${fulfilment.orderId}`);
