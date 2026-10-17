@@ -11,6 +11,15 @@ export const PAGE_BLOCKS: Record<string, BlockDef> = {
   outfit_builder_intro: { label: "Outfit Builder intro", fields: [] },
   newsletter: { label: "Newsletter signup", fields: [] },
 };
+export const BRAND_PAGE_BLOCKS: Record<string, BlockDef> = {
+  product_rail: { label: "Brand product rail", fields: [{ name: "title", label: "Section title" }, { name: "source", label: "Source", type: "select", options: ["newest", "featured", "discounted"] }, { name: "limit", label: "How many (1–24)", type: "number" }] },
+  collection_feature: { label: "Brand collection feature", fields: [{ name: "slug", label: "Collection slug" }] },
+  look_feature: { label: "Brand look feature", fields: [{ name: "slug", label: "Look slug" }] },
+  editorial_rail: { label: "Brand journal stories", fields: [{ name: "title", label: "Section title" }, { name: "limit", label: "How many (1–6)", type: "number" }] },
+  promo: { label: "Promotional banner", fields: [{ name: "title", label: "Title" }, { name: "body", label: "Text", type: "textarea" }, { name: "ctaLabel", label: "Button label" }, { name: "ctaHref", label: "Button link" }] },
+  outfit_builder_intro: { label: "Outfit Builder intro", fields: [] },
+  newsletter: { label: "Newsletter signup", fields: [] },
+};
 export const ARTICLE_BLOCKS: Record<string, BlockDef> = {
   paragraph: { label: "Paragraph", fields: [{ name: "text", label: "Text", type: "textarea" }] },
   heading: { label: "Heading", fields: [{ name: "text", label: "Heading" }] },
