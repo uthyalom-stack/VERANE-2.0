@@ -1,6 +1,6 @@
 import { and, desc, eq, inArray } from "drizzle-orm";
 import type { Db } from "@/infrastructure/db/client";
-import { orderItems, orderStatusHistory, orders, shippingRecords } from "@/infrastructure/db/schema";
+import { orderBrandFulfilments, orderItems, orderStatusHistory, orders, shippingRecords } from "@/infrastructure/db/schema";
 import { safeEqual, sha256Hex } from "@/lib/crypto";
 import { assertCan, scopedBrandIds, type Actor } from "@/domains/authorization";
 import { AppError } from "@/lib/errors";
@@ -8,12 +8,13 @@ import { AppError } from "@/lib/errors";
 export async function loadOrderBundle(db: Db, orderId: string) {
   const [order] = await db.select().from(orders).where(eq(orders.id, orderId));
   if (!order) return null;
-  const [items, history, shipments] = await Promise.all([
+  const [items, history, shipments, fulfillments] = await Promise.all([
     db.select().from(orderItems).where(eq(orderItems.orderId, orderId)),
     db.select().from(orderStatusHistory).where(eq(orderStatusHistory.orderId, orderId)).orderBy(desc(orderStatusHistory.createdAt)),
     db.select().from(shippingRecords).where(eq(shippingRecords.orderId, orderId)),
+    db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, orderId)),
   ]);
-  return { order, items, history, shipments };
+  return { order, items, history, shipments, fulfillments };
 }
 
 export async function listOrdersForUser(db: Db, userId: string, limit = 50) {
@@ -54,6 +55,6 @@ export async function getOrderForAdmin(db: Db, actor: Actor, orderId: string) {
   const brandIds = [...new Set(b.items.map((i) => i.brandId))];
   const allowed = brandIds.filter((id) => actorCan(actor, "orders.read", id));
   if (allowed.length === 0) throw new AppError("FORBIDDEN", "You do not have access to this resource");
-  return { ...b, items: b.items.filter((i) => allowed.includes(i.brandId)), partial: allowed.length < brandIds.length };
+  return { ...b, items: b.items.filter((i) => allowed.includes(i.brandId)), fulfillments: b.fulfillments.filter((f) => allowed.includes(f.brandId)), partial: allowed.length < brandIds.length };
 }
 function actorCan(actor: Actor, perm: "orders.read", brandId: string) { try { assertCan(actor, perm, brandId); return true; } catch { return false; } }
