@@ -76,7 +76,7 @@ export const BLOCK_SCHEMAS = {
   hero: z.object({ title: z.string().max(120), subtitle: z.string().max(240).optional(), ctaLabel: z.string().max(40).optional(), ctaHref: href.optional(), mediaKey: z.string().optional() }),
   campaign_hero: z.object({ slug: z.string().min(1) }),
   brand_intro: z.object({}), outfit_builder_intro: z.object({}), newsletter: z.object({}),
-  product_rail: z.object({ title: z.string().max(80), source: z.enum(["newest", "featured"]), limit: z.coerce.number().int().min(1).max(24) }),
+  product_rail: z.object({ title: z.string().max(80), source: z.enum(["newest", "featured", "discounted"]), limit: z.coerce.number().int().min(1).max(24) }),
   collection_feature: z.object({ slug: z.string().min(1) }), look_feature: z.object({ slug: z.string().min(1) }),
   editorial_rail: z.object({ title: z.string().max(80).optional(), limit: z.coerce.number().int().min(1).max(6) }),
   promo: z.object({ title: z.string().max(120), body: z.string().max(300).optional(), ctaLabel: z.string().max(40).optional(), ctaHref: href.optional() }),
