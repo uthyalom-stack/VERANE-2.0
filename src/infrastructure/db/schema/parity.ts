@@ -1,6 +1,6 @@
 import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { brands, products, productVariants } from "./catalog";
-import { orders, orderItems } from "./commerce";
+import { orders } from "./commerce";
 import { createdAt, id, money, ts, updatedAt } from "./_helpers";
 import { users } from "./identity";
 
