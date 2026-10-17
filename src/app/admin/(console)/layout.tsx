@@ -9,7 +9,7 @@ const has = (a: Actor, p: string) => a.grants.some((g) => g.permissions.has(p));
 const NAV: Array<[string, string, string]> = [
   ["/admin", "Overview", ""], ["/admin/products", "Products", "catalog.product.read"], ["/admin/categories", "Categories", "catalog.category.write"], ["/admin/collections", "Collections", "catalog.collection.write"],
   ["/admin/inventory", "Inventory", "inventory.read"], ["/admin/media", "Media", "media.write"], ["/admin/orders", "Orders", "orders.read"], ["/admin/customers", "Customers", "customers.read"],
-  ["/admin/discounts", "Discounts", "discounts.write"], ["/admin/brands", "Brands", "brands.write"], ["/admin/looks", "Looks", "content.write"], ["/admin/campaigns", "Campaigns", "content.write"],
+  ["/admin/discounts", "Discounts", "discounts.write"], ["/admin/brands", "Brands", "brands.write"], ["/admin/looks", "Looks", "content.write"], ["/admin/campaigns", "Campaigns", "content.write"], ["/admin/marketing", "AI Marketing", "content.write"],
   ["/admin/journal", "Journal", "content.write"], ["/admin/pages", "Homepage", "content.write"], ["/admin/newsletter", "Newsletter", "newsletter.read"], ["/admin/analytics", "Analytics", "analytics.read"],
   ["/admin/users", "Users & roles", "users.manage"], ["/admin/audit", "Audit log", "audit.read"], ["/admin/config", "Configuration", "config.read"], ["/admin/operations", "Operations", "content.write"],
 ];
