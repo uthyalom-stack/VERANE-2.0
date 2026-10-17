@@ -20,7 +20,7 @@ export default async function BrandStorefrontEditor({ params }: { params: Promis
   return <div>
     <PageHead title={`${brand.name} storefront`} sub="Build a brand-specific landing page with reusable product, collection, look, journal and campaign sections." action={<A href={`/brands/${brand.slug}`}>Preview storefront</A>} />
     <Panel title="Storefront sections">
-      <p className="mb-4 text-sm text-muted">These sections appear on this brand's public page only. Product rails, collections, looks and journal stories are filtered to the selected brand. Save as draft while editing; publish when the page is ready.</p>
+      <p className="mb-4 text-sm text-muted">These sections appear on this brand&apos;s public page only. Product rails, collections, looks and journal stories are filtered to the selected brand. Save as draft while editing; publish when the page is ready.</p>
       <BlockEditor action={savePageAction} defs={BRAND_PAGE_BLOCKS} initial={blocks.map((b) => ({ type: b.type, data: b.data }))} hidden={{ pageId: page.id }} fieldName="blocks" statusField />
     </Panel>
   </div>;
