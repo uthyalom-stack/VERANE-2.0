@@ -7,7 +7,7 @@ import { expireStaleOrders, finalizePayment, handlePaymentWebhook, startCheckout
 import { createMockPaymentProvider } from "@/infrastructure/payments/mock";
 import { getAvailability } from "@/domains/inventory";
 import { hmacHex, sha256Hex } from "@/lib/crypto";
-import { emailOutbox, inventoryLevels, orderBrandFulfilments, orders, paymentAttempts, pickupLocations, productVariants, webhookEvents } from "@/infrastructure/db/schema";
+import { emailOutbox, inventoryLevels, orderBrandFulfilments, orderItems, orders, paymentAttempts, pickupLocations, productVariants, webhookEvents } from "@/infrastructure/db/schema";
 
 let ctx: Awaited<ReturnType<typeof makeTestDb>>; let a: Awaited<ReturnType<typeof seedBrandsAndActors>>; let variantId = "";
 const provider = createMockPaymentProvider({ secret: "whsec" });
@@ -85,6 +85,58 @@ describe("checkout + payment finalisation", () => {
     const id = await cartWith(1);
     await ctx.db.update(inventoryLevels).set({ onHand: 0, reserved: 0 }).where(eq(inventoryLevels.variantId, variantId)); // simulate sell-out elsewhere
     await expect(checkout(id)).rejects.toMatchObject({ code: "OUT_OF_STOCK" });
+  });
+});
+
+describe("pre-orders and custom sizing", () => {
+  it("allows a configured pre-order without reserving unavailable stock and snapshots its lead time", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, {
+      brandId: a.uthy.id,
+      name: "Pre-order Coat",
+      basePrice: 1_400_000,
+      status: "published",
+      preOrderEnabled: true,
+      fulfillmentTime: "Ships in 3–4 weeks",
+      variants: [{ sku: "PREORDER-COAT-M", size: "M", initialStock: 0 }],
+    });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await addToCart(ctx.db, cart.id, variant!.id, 1);
+    const view = await getCartView(ctx.db, cart.id);
+    expect(view.canCheckout).toBe(true);
+    expect(view.lines[0]).toMatchObject({ isPreOrder: true, fulfillmentTime: "Ships in 3–4 weeks" });
+
+    const order = await startCheckout(ctx.db, provider, {
+      cartId: cart.id, email: "preorder@example.com", phone: "08012345678", address, shipping,
+      callbackUrl: "http://localhost:3000/checkout/return",
+    });
+    const [line] = await ctx.db.select().from(orderItems).where(eq(orderItems.orderId, order.orderId));
+    const [level] = await ctx.db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variant!.id));
+    expect(line).toMatchObject({ isPreOrder: true, fulfillmentTimeSnapshot: "Ships in 3–4 weeks" });
+    expect(level).toMatchObject({ onHand: 0, reserved: 0 });
+
+    expect(await finalizePayment(ctx.db, provider, order.reference)).toBe("paid");
+    const [afterPayment] = await ctx.db.select().from(inventoryLevels).where(eq(inventoryLevels.variantId, variant!.id));
+    expect(afterPayment).toMatchObject({ onHand: 0, reserved: 0 });
+  });
+
+  it("requires custom measurements for made-to-measure products and stores valid measurements on the cart line", async () => {
+    const { id: productId } = await createProduct(ctx.db, a.superAdmin, {
+      brandId: a.uthy.id,
+      name: "Made-to-measure Shirt",
+      basePrice: 750_000,
+      status: "published",
+      customSizingEnabled: true,
+      variants: [{ sku: "CUSTOM-SHIRT-M", size: "M", initialStock: 2 }],
+    });
+    const [variant] = await ctx.db.select().from(productVariants).where(eq(productVariants.productId, productId));
+    const cart = await getOrCreateCart(ctx.db, { guestTokenHash: await sha256Hex(crypto.randomUUID()) });
+    await expect(addToCart(ctx.db, cart.id, variant!.id, 1)).rejects.toMatchObject({ code: "VALIDATION" });
+    const measurements = { chest: 96, waist: 82, hips: 98, length: 70 };
+    await addToCart(ctx.db, cart.id, variant!.id, 1, measurements);
+    const view = await getCartView(ctx.db, cart.id);
+    expect(view.canCheckout).toBe(true);
+    expect(view.lines[0]!.customMeasurements).toEqual(measurements);
   });
 });
 
