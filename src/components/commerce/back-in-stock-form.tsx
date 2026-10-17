@@ -28,7 +28,7 @@ export function BackInStockForm({ productId, variants }: { productId: string; va
     <form onSubmit={submit} className="mt-6 space-y-3 border border-line p-4" aria-label="Back in stock notification">
       <div>
         <h2 className="text-lg">Notify me when it returns</h2>
-        <p className="mt-1 text-sm text-muted">Choose your option and we'll email you when it's back in stock.</p>
+        <p className="mt-1 text-sm text-muted">Choose your option and we&apos;ll email you when it&apos;s back in stock.</p>
       </div>
       {variants.length > 0 && (
         <label className="block text-sm">
