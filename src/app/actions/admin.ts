@@ -13,7 +13,7 @@ import { attachProductMedia, detachProductMedia, removeVariant, reorderProductMe
 import { saveDiscount } from "@/domains/admin/discounts";
 import { saveArticle, saveCampaign, saveLook, savePageBlocks, setLookItems } from "@/domains/admin/content";
 import { createAdminUser, grantRole, revokeGrant } from "@/domains/admin/ops";
-import { createShipmentForOrder, adminSetOrderStatus } from "@/domains/orders/fulfilment";
+import { createShipmentForOrder, adminSetOrderStatus, setOrderStatus } from "@/domains/orders/fulfilment";
 import { getShippingProvider } from "@/infrastructure/shipping";
 import { updateAlt } from "@/domains/media";
 import { backInStockSubscriptions, brands, collaborationProductVariants, collaborationProducts, collaborationRequests, collaborations, emailOutbox, inventoryLevels, mediaAssets, orderBrandFulfilments, orders, pickupLocations, productVariants, products, trackingCampaigns } from "@/infrastructure/db/schema";
@@ -421,6 +421,13 @@ export async function updateBrandFulfilmentAction(_: ActionState, f: FormData): 
       fulfilledAt: next === "delivered" ? new Date() : null,
       updatedAt: new Date(),
     }).where(eq(orderBrandFulfilments.id, fulfilment.id));
+    if (next !== "cancelled" && order.status === "paid") await setOrderStatus(db, order.id, "processing", "Brand fulfilment started", actor.userId);
+    const allFulfilments = await db.select().from(orderBrandFulfilments).where(eq(orderBrandFulfilments.orderId, order.id));
+    if (allFulfilments.length > 0 && allFulfilments.every((row) => row.status === "delivered")) {
+      const [freshOrder] = await db.select().from(orders).where(eq(orders.id, order.id));
+      if (freshOrder?.status === "paid") await setOrderStatus(db, order.id, "processing", "All fulfilments completed", actor.userId);
+      if (freshOrder && freshOrder.status !== "delivered") await setOrderStatus(db, order.id, "delivered", "All brand fulfilments completed", actor.userId);
+    }
     await writeAudit(db, { actorUserId: actor.userId, action: "order.brand_fulfilment.update", entityType: "order", entityId: fulfilment.orderId, brandId: fulfilment.brandId, before: { status: fulfilment.status }, after: { status: next, method: fulfilment.method } });
     revalidatePath(`/admin/orders/${fulfilment.orderId}`);
     return { ok: true, message: "Brand fulfilment updated" };
