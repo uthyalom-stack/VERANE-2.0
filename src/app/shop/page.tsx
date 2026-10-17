@@ -38,9 +38,29 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
     const labels: Record<string, string> = { "uthy-luxury": "UTHY LUXURY", "alomziee-footies": "ALOMZIEE FOOTIES", in_stock: "In stock", true: "Yes" };
     return labels[v] ?? v.replace(/[_-]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
+  const priceRanges = [
+    { label: "Under ₦25,000", minPrice: undefined, maxPrice: "2499999" },
+    { label: "₦25,000–₦49,999", minPrice: "2500000", maxPrice: "4999999" },
+    { label: "₦50,000–₦99,999", minPrice: "5000000", maxPrice: "9999999" },
+    { label: "₦100,000+", minPrice: "10000000", maxPrice: undefined },
+  ];
+  const selectedPriceRange = priceRanges.find((range) => (sp.minPrice ?? "") === (range.minPrice ?? "") && (sp.maxPrice ?? "") === (range.maxPrice ?? ""));
   const activeFilterKeys = ["brand", "type", "style", "occasion", "size", "color", "availability", "sale", "featured"].filter((key) => Boolean(sp[key]) && sp[key] !== "false");
-  const activeFilterLabels: Record<string, string> = { brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "On sale", featured: "Featured only" };
+  if (sp.minPrice || sp.maxPrice) activeFilterKeys.push("price");
+  const activeFilterLabels: Record<string, string> = { brand: "Brand", type: "Type", style: "Style", occasion: "Occasion", size: "Size", color: "Colour", availability: "Availability", sale: "On sale", featured: "Featured only", price: "Price" };
   const activeFilterLabel = (key: string) => activeFilterLabels[key] ?? key;
+  const activeFilterValue = (key: string) => key === "price" ? (selectedPriceRange?.label ?? "Custom range") : pretty(sp[key]!);
+  const priceFilter = (
+    <div role="group" aria-label="Price range" className="house-filter-group mb-7 border-b border-line pb-6">
+      <p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">Price / NGN</p>
+      <div className="flex flex-wrap gap-2">
+        {priceRanges.map((range) => {
+          const selected = (sp.minPrice ?? "") === (range.minPrice ?? "") && (sp.maxPrice ?? "") === (range.maxPrice ?? "");
+          return <Link key={range.label} href={href({ minPrice: range.minPrice, maxPrice: range.maxPrice })} aria-current={selected && (sp.minPrice || sp.maxPrice) ? "true" : undefined} className="house-filter-chip min-h-9 rounded-full border border-line px-3.5 py-2 text-xs transition-colors aria-[current=true]:border-accent aria-[current=true]:bg-accent aria-[current=true]:text-accent-fg">{range.label}</Link>;
+        })}
+      </div>
+    </div>
+  );
   const group = (label: string, key: string, values: string[]) => values.length === 0 ? null : (
     <div role="group" aria-label={label} className="house-filter-group mb-7 border-b border-line pb-6"><p className="mb-3 text-[10px] uppercase tracking-[0.2em] text-muted">{label}</p>
       <div className="flex flex-wrap gap-2">{values.map((v) => (
@@ -78,6 +98,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
               {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
               {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
               {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
+              {priceFilter}
               {group("Availability", "availability", ["in_stock"])}
               {toggleFilter("Offers", "sale")}
               {toggleFilter("Discovery", "featured")}
@@ -88,6 +109,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
             {group("Brand", "brand", ["uthy-luxury", "alomziee-footies"])}
             {group("Type", "type", facets.types)}{group("Style", "style", facets.styles)}{group("Occasion", "occasion", facets.occasions)}
             {group("Size", "size", facets.sizes)}{group("Colour", "color", facets.colors)}
+            {priceFilter}
             {group("Availability", "availability", ["in_stock"])}
             {toggleFilter("Offers", "sale")}
             {toggleFilter("Discovery", "featured")}
@@ -99,7 +121,7 @@ export default async function ShopPage({ searchParams }: { searchParams: Promise
               <Link key={s} href={href({ sort: s })} aria-current={query.sort === s ? "true" : undefined} className="text-muted transition-colors hover:text-fg aria-[current=true]:text-accent aria-[current=true]:underline aria-[current=true]:underline-offset-4">{{ featured: "Featured", newest: "Newest", price_asc: "Price ↑", price_desc: "Price ↓" }[s]}</Link>))}</nav></div>
           {activeFilterKeys.length > 0 && <div className="mb-6 flex flex-wrap items-center gap-2" aria-label="Active filters">
             <span className="mr-1 text-[10px] uppercase tracking-[0.16em] text-muted">Applied</span>
-            {activeFilterKeys.map((key) => <Link key={key} href={href({ [key]: undefined })} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line px-3 py-2 text-xs transition-colors hover:border-accent hover:text-accent"><span>{activeFilterLabel(key)}: {pretty(sp[key]!)}</span><span aria-hidden="true">×</span><span className="sr-only">Remove {activeFilterLabel(key)} filter</span></Link>)}
+            {activeFilterKeys.map((key) => <Link key={key} href={key === "price" ? href({ minPrice: undefined, maxPrice: undefined }) : href({ [key]: undefined })} className="inline-flex min-h-9 items-center gap-2 rounded-full border border-line px-3 py-2 text-xs transition-colors hover:border-accent hover:text-accent"><span>{activeFilterLabel(key)}: {activeFilterValue(key)}</span><span aria-hidden="true">×</span><span className="sr-only">Remove {activeFilterLabel(key)} filter</span></Link>)}
             <Link href="/shop" className="ml-1 min-h-9 px-2 py-2 text-xs text-muted underline underline-offset-4">Clear all</Link>
           </div>}
           {cards.length === 0 ? <EmptyState title="Nothing matches those filters">Remove a filter to see more of the house.</EmptyState> : (
