@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 import { getDb } from "@/lib/server";
+import { getSiteConfig } from "@/domains/site-content";
 import { brands, pageBlocks, pages } from "@/infrastructure/db/schema";
 import { listShopProducts, toCardData } from "@/domains/catalog/public";
 import { ProductCard } from "@/components/commerce/product-card";
@@ -22,6 +23,7 @@ export async function generateMetadata({ params }: P): Promise<Metadata> {
 export default async function BrandPage({ params }: P) {
   const { brand: slug } = await params;
   const db = getDb();
+  const siteConfig = await getSiteConfig(db);
   const [b] = await db.select().from(brands).where(eq(brands.slug, slug));
   if (!b || !b.isActive) notFound();
   const { items } = await listShopProducts(db, { brand: b.slug, pageSize: 12 });
@@ -37,7 +39,7 @@ export default async function BrandPage({ params }: P) {
         <div className="house-brand-hero__wash absolute inset-0 -z-10" />
         <div className="mx-auto w-full max-w-[1600px] px-5 pb-12 pt-32 md:px-10 md:pb-16">
           <div className={`house-brand-hero__panel glass max-w-4xl rounded-[var(--r-lg)] p-6 md:p-10 ${uthy ? "" : "md:ml-auto md:text-right"}`}>
-            <p className="house-kicker">{uthy ? "The art of restraint / 01" : "Unapologetic expression / 02"}</p>
+            <p className="house-kicker">{b.tagline || b.name}</p>
             <h1 className={uthy ? "display mt-5 text-[clamp(3rem,11vw,9rem)]" : "display mt-5 text-[clamp(3rem,13vw,10rem)] uppercase leading-[.82]"}>{b.name}</h1>
             <p className={uthy ? "mt-6 text-lg text-muted" : "mt-6 text-xl font-medium text-accent"}>{b.tagline}</p>
             {b.description && <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted md:text-base">{b.description}</p>}
@@ -46,8 +48,8 @@ export default async function BrandPage({ params }: P) {
         </div>
       </section>
       <section className="house-brand-manifesto mx-auto grid max-w-[1600px] gap-5 px-5 py-14 md:grid-cols-[1fr_auto] md:items-end md:px-10 md:py-20">
-        <div><p className="house-kicker">A VÉRANE house / {uthy ? "One" : "Two"}</p><h2 className="display mt-4 max-w-[14ch] text-4xl md:text-6xl">{uthy ? "Less noise. More presence." : "Made to be noticed."}</h2></div>
-        <p className="max-w-md text-sm leading-relaxed text-muted">{uthy ? "A considered point of view, built around shape, texture and quiet confidence." : "A bolder point of view, built for contrast, movement and unapologetic self-expression."}</p>
+        <div><p className="house-kicker">{siteConfig.settings.siteName}</p><h2 className="display mt-4 max-w-[14ch] text-4xl md:text-6xl">{b.tagline || b.name}</h2></div>
+        <p className="max-w-md text-sm leading-relaxed text-muted">{b.description || `Discover the latest from ${b.name}.`}</p>
       </section>
       {blocks.length > 0 && <HomeBlocks db={db} blocks={blocks} brandSlug={b.slug} />}
       <section className="mx-auto max-w-[1600px] px-5 pb-24 pt-8 md:px-10">
