@@ -7,7 +7,7 @@ import { parseMajorToMinor } from "@/lib/money";
 import { AppError } from "@/lib/errors";
 import { requireAdmin } from "@/lib/http/session";
 import { run, fd, type ActionState } from "@/lib/http/action";
-import { archiveProduct, createProduct, updateProduct } from "@/domains/catalog/admin";
+import { archiveProduct, createProduct, restoreProduct, updateProduct } from "@/domains/catalog/admin";
 import { adjustStock } from "@/domains/inventory";
 import { attachProductMedia, detachProductMedia, removeVariant, reorderProductMedia, saveCategory, saveCollection, setCollectionProducts, setProductStatus, upsertVariant } from "@/domains/admin/catalog";
 import { saveDiscount } from "@/domains/admin/discounts";
@@ -41,6 +41,7 @@ export async function saveProductAction(_: ActionState, f: FormData): Promise<Ac
   return res;
 }
 export async function archiveProductAction(id: string): Promise<void> { await run(async () => { await archiveProduct(getDb(), (await ctx()).actor, id); revalidatePath("/admin/products"); }); redirect("/admin/products"); }
+export async function restoreArchivedProductAction(id: string): Promise<void> { await run(async () => { await restoreProduct(getDb(), (await ctx()).actor, id); revalidatePath("/admin/products"); revalidatePath("/admin/products/history"); }); redirect("/admin/products/history"); }
 export async function setProductStatusAction(id: string, status: "draft" | "published"): Promise<void> { await run(async () => { await setProductStatus(getDb(), (await ctx()).actor, id, status); revalidatePath(`/admin/products/${id}`); }); }
 
 export async function saveVariantAction(_: ActionState, f: FormData): Promise<ActionState> {
