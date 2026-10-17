@@ -72,7 +72,7 @@ export async function adjustStockAction(_: ActionState, f: FormData): Promise<Ac
       const subs = await db.select().from(backInStockSubscriptions).where(and(eq(backInStockSubscriptions.variantId, r.variantId!), eq(backInStockSubscriptions.status, "active")));
       for (const sub of subs) {
         await db.insert(emailOutbox).values({
-          id: crypto.randomUUID(), dedupeKey: `back-in-stock:${sub.id}`, template: "back_in_stock", toEmail: sub.email,
+          id: crypto.randomUUID(), dedupeKey: `back-in-stock:${sub.id}:${sub.updatedAt.getTime()}`, template: "back_in_stock", toEmail: sub.email,
           payloadJson: { productName: stock.productName, productSlug: stock.productSlug, brandSlug: stock.brandSlug },
         }).onConflictDoNothing();
         await db.update(backInStockSubscriptions).set({ status: "notified", notifiedAt: new Date(), updatedAt: new Date() }).where(eq(backInStockSubscriptions.id, sub.id));
