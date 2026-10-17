@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { addToBagAction } from "@/app/actions/cart";
 import { BAG_CHANGED, BAG_OPEN } from "./bag-drawer";
 
@@ -17,7 +17,7 @@ export type QuickAddVariant = {
 /** Small product-card variant picker. The server action remains the authority for stock and price. */
 export function ProductQuickAdd({ productName, variants }: { productName: string; variants: QuickAddVariant[] }) {
   const sellable = (v: QuickAddVariant) => v.available > 0 || v.allowBackorder;
-  const options = useMemo(() => variants.filter(sellable), [variants]);
+  const options = variants.filter(sellable);
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState(options[0]?.id ?? "");
   const [message, setMessage] = useState("");
