@@ -68,7 +68,10 @@ export default async function AdminProductDetailPage({ params }: { params: Promi
       <section className="mt-8 overflow-hidden rounded-2xl border"><div className="border-b px-5 py-4"><h2 className="font-semibold">Variants & stock ({variants.length})</h2></div>
         <div className="divide-y">{variants.map(({variant:v,stock})=><div key={v.id} className="flex flex-wrap items-center justify-between gap-4 px-5 py-4">
           <div><p className="font-medium">{v.sku} · {[v.size,v.colorName].filter(Boolean).join(" / ") || "No options"}</p><p className="mt-1 text-xs text-neutral-500">{v.isActive?"Active":"Inactive"} · On hand {stock?.onHand ?? 0} · Reserved {stock?.reserved ?? 0} · Available {(stock?.onHand ?? 0)-(stock?.reserved ?? 0)}</p></div>
-          <div className="flex gap-2"><form action={removeVariantAction.bind(null,id,v.id)}><button className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700">{v.isActive?"Remove / deactivate":"Delete variant"}</button></form></div>
+          <div className="grid gap-4 xl:grid-cols-[1fr_auto] xl:items-end">
+            <AdminActionForm action={saveVariantAction} submitLabel="Save variant"><input type="hidden" name="productId" value={id}/><input type="hidden" name="id" value={v.id}/><div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4"><AdminField label="SKU" name="sku" defaultValue={v.sku} required/><AdminField label="Size" name="size" defaultValue={v.size??""}/><AdminField label="Colour" name="colorName" defaultValue={v.colorName??""}/><AdminField label="Colour hex" name="colorHex" defaultValue={v.colorHex??""}/><AdminField label="Price override (NGN)" name="priceOverride" type="number" defaultValue={v.priceOverride==null?"":(v.priceOverride/100).toFixed(2)}/><AdminField label="Sort order" name="sortOrder" type="number" defaultValue={v.sortOrder}/><AdminSelect label="Status" name="isActive" defaultValue={v.isActive?"on":"off"} options={[{label:"Active",value:"on"},{label:"Inactive",value:"off"}]}/></div></AdminActionForm>
+            <form action={removeVariantAction.bind(null,id,v.id)}><button className="rounded-full border border-red-200 px-3 py-2 text-xs text-red-700">{v.isActive?"Remove / deactivate":"Delete variant"}</button></form>
+          </div>
         </div>)}</div>
       </section>
     </main>
