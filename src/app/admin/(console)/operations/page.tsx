@@ -18,7 +18,7 @@ export default async function OperationsAdminPage() {
   const contentScope = scopedBrandIds(actor, "content.write");
   const attributionQuery = db.select({
     campaignId: orderAttributions.campaignId,
-    orders: sql<number>`count(distinct ${orderAttributions.orderId})`,
+    orders: sql<number>`count(distinct case when ${orders.paymentStatus} = 'paid' then ${orderAttributions.orderId} end)`,
     revenue: sql<number>`coalesce(sum(case when ${orders.paymentStatus} = 'paid' then ${orderItems.lineTotal} else 0 end), 0)`,
   }).from(orderAttributions)
     .innerJoin(orders, eq(orders.id, orderAttributions.orderId))
@@ -30,7 +30,7 @@ export default async function OperationsAdminPage() {
     : contentScope.length
       ? await db.select({
           campaignId: orderAttributions.campaignId,
-          orders: sql<number>`count(distinct ${orderAttributions.orderId})`,
+          orders: sql<number>`count(distinct case when ${orders.paymentStatus} = 'paid' then ${orderAttributions.orderId} end)`,
           revenue: sql<number>`coalesce(sum(case when ${orders.paymentStatus} = 'paid' then ${orderItems.lineTotal} else 0 end), 0)`,
         }).from(orderAttributions)
           .innerJoin(orders, eq(orders.id, orderAttributions.orderId))
@@ -71,7 +71,7 @@ export default async function OperationsAdminPage() {
 
     {can(actor, "content.write", null) || visibleBrands.length > 0 ? <Panel title="Social tracking links">
       <p className="mb-4 text-sm text-muted">Use <code>/go/slug</code> in social posts. Visits are recorded against the campaign; destinations are restricted to on-site paths.</p>
-      <Table head={["Campaign", "Brand", "Link", "Visits", "Attributed orders", "Paid item revenue", "Status", "Created"]} rows={tracking.map((c) => { const stats = attributionByCampaign.get(c.id); return [c.name, c.brandId ? brandNames.get(c.brandId) ?? "Unknown" : "House-wide", <code key="url">/go/{c.slug}</code>, visits.get(c.id) ?? 0, stats?.orders ?? 0, formatMoney(stats?.revenue ?? 0), <Badge key="status" tone={c.isActive ? "ok" : "warn"}>{c.isActive ? "Active" : "Paused"}</Badge>, when(c.createdAt)]; })} empty="No tracking links created yet." />
+      <Table head={["Campaign", "Brand", "Link", "Visits", "Paid attributed orders", "Paid item revenue", "Status", "Created"]} rows={tracking.map((c) => { const stats = attributionByCampaign.get(c.id); return [c.name, c.brandId ? brandNames.get(c.brandId) ?? "Unknown" : "House-wide", <code key="url">/go/{c.slug}</code>, visits.get(c.id) ?? 0, stats?.orders ?? 0, formatMoney(stats?.revenue ?? 0), <Badge key="status" tone={c.isActive ? "ok" : "warn"}>{c.isActive ? "Active" : "Paused"}</Badge>, when(c.createdAt)]; })} empty="No tracking links created yet." />
       {tracking.map((c) => <div key={c.id} className="mt-6 border-t border-line pt-5"><h3 className="mb-3 text-sm font-medium">Edit {c.name}</h3><div className="max-w-2xl"><ActionForm action={saveTrackingLinkAction} submitLabel="Save tracking link" hidden={{ id: c.id }} fields={[
         { name: "name", label: "Campaign name", defaultValue: c.name },
         { name: "slug", label: "Short slug", defaultValue: c.slug, hint: "Public link: /go/this-slug" },
