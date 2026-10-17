@@ -1,7 +1,7 @@
 "use server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { getDb } from "@/infrastructure/db/client";
 import { parseMajorToMinor } from "@/lib/money";
 import { AppError } from "@/lib/errors";
@@ -203,9 +203,10 @@ export async function reviewCollaborationRequestAction(_: ActionState, f: FormDa
       if (status === "accepted") {
         const [from] = await tx.select().from(brands).where(eq(brands.id, request.fromBrandId));
         const [to] = await tx.select().from(brands).where(eq(brands.id, request.toBrandId));
-        collaborationId = crypto.randomUUID();
+        const newCollaborationId = crypto.randomUUID();
+        collaborationId = newCollaborationId;
         await tx.insert(collaborations).values({
-          id: collaborationId, brandId: request.toBrandId, slug: "collaboration-" + request.id,
+          id: newCollaborationId, brandId: request.toBrandId, slug: "collaboration-" + request.id,
           partnerName: from?.name ?? "VÉRANE partner", title: request.title, status: "draft",
         });
       }
