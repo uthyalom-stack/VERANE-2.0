@@ -81,7 +81,7 @@ export async function toCardData(db: Db, items: Array<typeof products.$inferSele
     db.select({ pm: productMedia, m: mediaAssets }).from(productMedia).innerJoin(mediaAssets, eq(mediaAssets.id, productMedia.mediaId))
       .where(and(inArray(productMedia.productId, ids), sql`${productMedia.role} IN ('primary','secondary','model')`)).orderBy(asc(productMedia.sortOrder)),
     db.select({ v: productVariants, l: inventoryLevels }).from(productVariants).leftJoin(inventoryLevels, eq(inventoryLevels.variantId, productVariants.id))
-      .where(and(inArray(productVariants.productId, ids), eq(productVariants.isActive, true))),
+      .where(and(inArray(productVariants.productId, ids), eq(productVariants.isActive, true))).orderBy(asc(productVariants.sortOrder)),
   ]);
   const bMap = new Map(brandRows.map((b) => [b.id, b]));
   return items.map((p) => {
