@@ -282,3 +282,8 @@ footer nav a:hover { transform: translateX(3px); }
 .product-card__swatch { display: grid; width: 1.1rem; height: 1.1rem; place-items: center; overflow: hidden; border: 1px solid color-mix(in oklab, var(--fg) 42%, transparent); border-radius: 999px; background: var(--bg); box-shadow: 0 0 0 2px var(--bg); }
 .product-card__swatch > span:first-child { display: block; width: 100%; height: 100%; border-radius: inherit; }
 .product-card__swatch[title="White"] > span:first-child, .product-card__swatch[title="Ivory"] > span:first-child, .product-card__swatch[title="Cream"] > span:first-child { border: 1px solid rgb(0 0 0 / .15); }
+
+@media (max-width: 639px) { .house-header-utility { display: none; } }
+.house-mobile-menu__join { color: var(--accent); }
+.house-mobile-menu__join span { display: inline-block; transition: transform var(--dur-2) var(--ease); }
+.house-mobile-menu__join:hover span { transform: translate(3px, -3px); }
