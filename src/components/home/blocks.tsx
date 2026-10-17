@@ -108,7 +108,13 @@ function BrandIntro({ brands }: { brands: Awaited<ReturnType<typeof listBrands>>
 }
 
 async function ProductRail({ db, data }: { db: Db; data: Record<string, unknown> }) {
-  const { items } = await listShopProducts(db, { sort: data.source === "newest" ? "newest" : "featured", pageSize: Math.min(Number(data.limit) || 8, 24) });
+  const source = str(data.source, "newest");
+  const { items } = await listShopProducts(db, {
+    sort: source === "newest" ? "newest" : "featured",
+    ...(source === "featured" ? { featured: true } : {}),
+    ...(source === "discounted" ? { sale: true } : {}),
+    pageSize: Math.min(Number(data.limit) || 8, 24),
+  });
   if (!items.length) return null;
   const cards = await toCardData(db, items);
   return (
