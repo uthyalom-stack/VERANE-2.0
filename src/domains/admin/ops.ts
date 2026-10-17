@@ -87,6 +87,7 @@ export function integrationStatus(env: Env, actor: Actor) {
     { name: "Shipping", driver: env.SHIPPING_DRIVER, status: env.SHIPPING_DRIVER === "shipbubble" ? yes(!!env.SHIPBUBBLE_API_KEY && !!env.SHIP_ORIGIN_ADDRESS) : "MOCK — not real rates" },
     { name: "Email", driver: env.EMAIL_DRIVER, status: env.EMAIL_DRIVER === "resend" ? yes(!!env.RESEND_API_KEY) : "CONSOLE — not delivered" },
     { name: "Media", driver: env.MEDIA_DRIVER, status: env.MEDIA_DRIVER === "r2" ? "R2 binding (verify in Cloudflare)" : "local disk (dev)" },
+    { name: "AI Marketing workspace", driver: env.MARKETING_AI_URL ? env.MARKETING_AI_URL : "not connected", status: yes(!!env.MARKETING_AI_URL) },
     { name: "Cron secret", driver: "Bearer", status: yes(!!env.CRON_SECRET) },
   ];
 }
