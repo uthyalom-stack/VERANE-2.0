@@ -210,7 +210,12 @@ export async function placeOrderAction(form: Record<string, string>): Promise<Ac
     const view = await getCartView(db, cartId, tax());
     if (!view.lines.length) throw new AppError("VALIDATION", "Your bag is empty");
     if (!view.canCheckout) throw new AppError("OUT_OF_STOCK", "Some items in your bag are unavailable");
-    const { shipping } = await resolveBrandSelections(form, cartId, view, db);
+    const resolvedShipping = await resolveBrandSelections(form, cartId, view, db);
+    const expectedTotal = Number(form.expectedTotal);
+    if (!Number.isSafeInteger(expectedTotal) || expectedTotal !== resolvedShipping.pricing.total) {
+      throw new AppError("CONFLICT", "Delivery prices changed while you were checking out. Review the updated total and try again.");
+    }
+    const shipping = resolvedShipping.shipping;
     const user = await getCurrentUser();
     const env = getEnv();
     const input = checkoutInput.parse({
