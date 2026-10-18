@@ -1,6 +1,4 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
-
-# dependencies
+# Dependencies
 node_modules/
 .pnp
 .pnp.*
@@ -10,43 +8,45 @@ node_modules/
 !.yarn/releases
 !.yarn/versions
 
-# testing
+# Testing
 coverage/
 
-# next.js
+# Next.js
 .next/
 out/
+next-env.d.ts
 
-# cloudflare open-next & wrangler
+# Cloudflare OpenNext & Wrangler
 .open-next/
 .open-next
 .wrangler/
 .wrangler
 
-# local databases
+# Local databases
 *.db
 *.db-journal
+*.sqlite
+*.sqlite3
 
-# production
+# Production and build output
 build/
 
-# misc
+# Miscellaneous
 .DS_Store
 *.pem
 
-# debug
+# Debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files
+# Environment secrets
 .env*
 !.env.example
 
-# vercel
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
-next-env.d.ts

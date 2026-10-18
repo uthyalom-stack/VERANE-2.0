@@ -1,0 +1,22 @@
+# Decisions
+- D-01 Modular monolith; domains take `db` as a parameter (testable, UI never touches DB directly).
+- D-02 Money = integer kobo; `currency` stored on rows; no floats.
+- D-03 Stock safety = single-statement compare-and-set UPDATE + unique `idempotency_key` ledger rows in one transaction. Does not depend on isolation level.
+- D-04 Passwords: PBKDF2-SHA256 via WebCrypto at 100,000 iterations (Workers hard cap); format is versioned in the hash string for later migration.
+- D-05 Outfit geometry stored as per-mille integers (x,y,scale) to avoid float drift.
+- D-06 Brand scope enforced in domain services from the DB row's brand, never client input; global-only permissions can't be satisfied by brand grants.
+- D-07 `images.unoptimized`: Workers has no sharp; delivery via R2 + (later) Cloudflare Images/transform URLs.
+- D-08 FTS5 virtual table created by raw SQL after migrations (Drizzle can't model it); visibility re-checked against `products`.
+- D-09 Homepage layout is data (`pages` + `page_blocks`); unknown block types are skipped, not fatal.
+- D-10 Sessions: opaque random token in HTTP-only cookie; only SHA-256(pepper+token) stored.
+- D-11 Nav lists only implemented routes.
+- D-12 Guest order access: random token minted at checkout, only its hash stored (`orders.public_token_hash`); delivered via HTTP-only cookie; plus rate-limited number+email lookup.
+- D-13 Shipping quotes are never persisted or trusted: the server re-quotes at order placement (chosen option by id) and again at shipment creation (provider quotes expire).
+- D-14 Payment finalisation = sequence of individually idempotent steps (conditional UPDATE / unique key) so webhook, redirect and retries can race safely; side effects run only for the caller that wins the pending→paid flip.
+- D-15 Transactional email via outbox (dedupe key, claim, backoff). Auth emails (contain secrets) are sent directly, never stored in the outbox.
+- D-16 Background work = Worker cron → authenticated internal route, so jobs use the same code/config as requests; every job idempotent.
+- D-17 Media validated by magic bytes; SVG rejected; keys content-addressed from (user, uploadId) so retries are idempotent; served through our route (works with R2 binding, supports Range).
+- D-18 Brand-scoped roles can only be bound to their own brand (enforced in `grantRole`); revoking a grant revokes that user's sessions.
+- D-19 Admin lists/reads are filtered by `brandScopeWhere`; direct-id access to another brand's record returns 404 in the UI and FORBIDDEN in services.
+- D-20 Analytics is fire-and-forget, PII-free (hashed session, PII-looking prop keys dropped, search text never stored).
+- D-21 Offline verification harness (`scripts/harness`) runs dependency-free tests on Node's test runner with a vitest shim — a stopgap, not a replacement for `npm test`.

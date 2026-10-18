@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+/* ---- Design tokens (centralised). Brand themes override the semantic layer only. ---- */
+:root {
+  --vr-ink: #0c0c0e; --vr-bone: #f2f0ec;
+  --uthy-basalt: #121316; --uthy-pewter: #8c9096; --uthy-opal: #e6e8ea; --uthy-champagne: #b9a27a;
+  --alo-ink: #0b0a1f; --alo-ultra: #2b2bff; --alo-lilac: #c9b8ff; --alo-citrus: #e4ff3a; --alo-paper: #f6f4ff;
+
+  --bg: var(--vr-ink); --fg: var(--vr-bone); --muted: color-mix(in oklab, var(--fg) 62%, transparent);
+  --line: color-mix(in oklab, var(--fg) 16%, transparent); --accent: var(--uthy-champagne); --accent-fg: #111;
+  --surface: color-mix(in oklab, var(--fg) 6%, transparent);
+  --glass-bg: color-mix(in oklab, var(--bg) 42%, transparent);
+  --glass-line: color-mix(in oklab, var(--fg) 22%, transparent);
+  --glass-blur: 18px;
+  --r-sm: 4px; --r-md: 10px; --r-lg: 22px;
+  --ease: cubic-bezier(.2,.7,.1,1); --dur-1: 160ms; --dur-2: 320ms; --dur-3: 700ms;
+  --z-nav: 40; --z-drawer: 60; --z-toast: 80;
+  --display: var(--font-bodoni), Didot, Georgia, serif;
+  --body: var(--font-instrument), system-ui, sans-serif;
+}
+[data-brand="uthy"] {
+  --bg: var(--uthy-basalt); --fg: var(--uthy-opal); --accent: var(--uthy-champagne); --accent-fg: #14120d;
+  --r-sm: 2px; --r-md: 4px; --r-lg: 8px; --display: var(--font-bodoni), Georgia, serif;
+}
+[data-brand="alomzie"] {
+  --bg: var(--alo-ink); --fg: var(--alo-paper); --accent: var(--alo-citrus); --accent-fg: #0b0a1f;
+  --r-sm: 10px; --r-md: 18px; --r-lg: 32px; --display: var(--font-syne), system-ui, sans-serif;
+}
+
+@theme inline {
+  --color-bg: var(--bg); --color-fg: var(--fg); --color-muted: var(--muted); --color-line: var(--line);
+  --color-accent: var(--accent); --color-accent-fg: var(--accent-fg); --color-surface: var(--surface);
+  --font-display: var(--display); --font-sans: var(--body);
+  --radius-sm: var(--r-sm); --radius-md: var(--r-md); --radius-lg: var(--r-lg);
+}
+
+html { background: var(--bg); color: var(--fg); scroll-behavior: smooth; }
+body { font-family: var(--body); min-height: 100dvh; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+h1, h2, h3, .display { font-family: var(--display); font-weight: 500; letter-spacing: -0.02em; line-height: 0.95; text-wrap: balance; }
+p { max-width: 62ch; text-wrap: pretty; }
+::selection { background: var(--accent); color: var(--accent-fg); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+/* Glass: nav, drawers, search, hero controls only - not every card. */
+.glass {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid var(--glass-line);
+  box-shadow: inset 0 1px 0 color-mix(in oklab, #fff 28%, transparent), 0 10px 40px -12px rgb(0 0 0 / .5);
+}
+@supports not (backdrop-filter: blur(1px)) { .glass { background: color-mix(in oklab, var(--bg) 92%, transparent); } }
+
+/* The one orchestrated moment: a split hero that opens toward the brand you lean into. */
+.split-hero { display: flex; min-height: 100svh; }
+.split-hero > a { flex: 1 1 50%; position: relative; overflow: hidden; transition: flex-grow var(--dur-3) var(--ease); }
+@media (hover: hover) and (min-width: 900px) {
+  .split-hero:has(a:hover) > a { flex-grow: 0.6; }
+  .split-hero > a:hover { flex-grow: 1.8; }
+}
+@media (max-width: 899px) { .split-hero { flex-direction: column; } .split-hero > a { min-height: 50svh; } }
+
+.rail { display: grid; grid-auto-flow: column; grid-auto-columns: min(78vw, 320px); gap: 1rem; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; }
+.rail > * { scroll-snap-align: start; }
+.rail::-webkit-scrollbar { display: none; }
+@media (min-width: 900px) { .rail { grid-auto-columns: calc((100% - 3rem) / 4); } }
+
+.skeleton { background: linear-gradient(90deg, var(--surface), color-mix(in oklab, var(--fg) 12%, transparent), var(--surface)); background-size: 200% 100%; animation: sk 1.4s linear infinite; }
+@keyframes sk { to { background-position: -200% 0; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
+}

@@ -1,0 +1,26 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "verane-2-0",
+  "main": "worker/index.ts",
+  "compatibility_date": "2025-09-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": { "directory": ".open-next/assets", "binding": "ASSETS" },
+  "observability": { "enabled": true },
+  "r2_buckets": [{ "binding": "MEDIA_BUCKET", "bucket_name": "verane-media" }],
+  "triggers": { "crons": ["*/15 * * * *"] },
+  "vars": {
+    "APP_ENV": "production",
+    "APP_URL": "https://REPLACE-WITH-YOUR-DOMAIN",
+    "MEDIA_DRIVER": "r2",
+    "MEDIA_PUBLIC_BASE_URL": "https://REPLACE-WITH-YOUR-DOMAIN/media",
+    "PAYMENT_DRIVER": "paystack",
+    "SHIPPING_DRIVER": "shipbubble",
+    "EMAIL_DRIVER": "resend",
+    "TAX_BPS": "0",
+    "TAX_INCLUSIVE": "true"
+  }
+  // Secrets (never commit; set with `wrangler secret put NAME`):
+  // DATABASE_URL, DATABASE_AUTH_TOKEN, SESSION_SECRET, TOKEN_PEPPER, CRON_SECRET, PAYSTACK_SECRET_KEY, PAYSTACK_PUBLIC_KEY,
+  // SHIPBUBBLE_API_KEY, SHIP_ORIGIN_NAME, SHIP_ORIGIN_PHONE, SHIP_ORIGIN_EMAIL, SHIP_ORIGIN_ADDRESS, RESEND_API_KEY, EMAIL_FROM,
+  // ADMIN_NOTIFY_EMAIL, ANALYTICS_DATABASE_URL, ANALYTICS_DATABASE_AUTH_TOKEN
+}

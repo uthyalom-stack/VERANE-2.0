@@ -1,54 +1,23 @@
-"use client";
+import type { Metadata } from "next";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { AuthShell } from "@/components/ui/auth-shell";
+import { ActionForm } from "@/components/ui/action-form";
+import { loginAction } from "@/app/actions/auth";
+import { getCurrentUser } from "@/lib/http/session";
+import { safeNext } from "@/lib/http/origin";
 
-import { useActionState } from "react";
-import { loginAction, AuthState } from "@/app/actions/auth";
+export const metadata: Metadata = { title: "Sign in", robots: { index: false } };
+export const dynamic = "force-dynamic";
 
-const initialState: AuthState = {};
-
-export default function LoginPage() {
-  const [state, formAction, isPending] = useActionState(loginAction, initialState);
-
+export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string; reset?: string }> }) {
+  const sp = await searchParams;
+  const next = safeNext(sp.next, "/account");
+  if ((await getCurrentUser())?.kind === "customer") redirect(next);
   return (
-    <div className="max-w-md mx-auto my-12 p-6 border rounded shadow-sm bg-white text-gray-900">
-      <h1 className="text-2xl font-bold mb-6 text-gray-900">VÉRANE 2.0 — Login</h1>
-      {state?.error && (
-        <div className="mb-4 p-3 rounded bg-red-50 border border-red-200 text-red-700 text-sm">
-          {state.error}
-        </div>
-      )}
-      <form action={formAction} className="space-y-4">
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-            Email
-          </label>
-          <input
-            id="email"
-            type="email"
-            name="email"
-            required
-            className="mt-1 block w-full rounded border border-gray-300 p-2 text-gray-900 bg-white"
-          />
-        </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-            Password
-          </label>
-          <input
-            id="password"
-            type="password"
-            name="password"
-            required
-            className="mt-1 block w-full rounded border border-gray-300 p-2 text-gray-900 bg-white"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={isPending}
-          className="w-full bg-black text-white py-2 px-4 rounded hover:bg-gray-800 transition disabled:opacity-50 cursor-pointer"
-        >
-          {isPending ? "Signing in..." : "Sign In"}
-        </button>
-      </form>
-    </div>
+    <AuthShell title="Sign in" intro={sp.reset ? "Your password has been changed. Sign in with the new one." : "Your orders, wishlist, saved outfits and addresses."}>
+      <ActionForm action={loginAction} submitLabel="Sign in" hidden={{ next }} fields={[{ name: "email", label: "Email", type: "email", autoComplete: "email" }, { name: "password", label: "Password", type: "password", autoComplete: "current-password" }]}
+        footer={<div className="flex justify-between text-sm text-muted"><Link href="/forgot-password" className="underline">Forgot password?</Link><Link href={`/register?next=${encodeURIComponent(next)}`} className="underline">Create account</Link></div>} />
+    </AuthShell>
   );
 }
