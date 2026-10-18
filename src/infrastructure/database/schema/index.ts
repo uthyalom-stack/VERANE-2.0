@@ -3,3 +3,4 @@ export * from "./users";
 export * from "./brands";
 export * from "./rbac";
 export * from "./audit";
+export * from "./catalog";

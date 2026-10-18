@@ -12,11 +12,26 @@ export const PERMISSIONS = {
   PRODUCTS_UPDATE: "products.update",
   PRODUCTS_ARCHIVE: "products.archive",
 
+  CATEGORIES_READ: "categories.read",
+  CATEGORIES_CREATE: "categories.create",
+  CATEGORIES_UPDATE: "categories.update",
+  CATEGORIES_ARCHIVE: "categories.archive",
+
+  COLLECTIONS_READ: "collections.read",
+  COLLECTIONS_CREATE: "collections.create",
+  COLLECTIONS_UPDATE: "collections.update",
+  COLLECTIONS_ARCHIVE: "collections.archive",
+
   ORDERS_READ: "orders.read",
   ORDERS_UPDATE: "orders.update",
 
   INVENTORY_READ: "inventory.read",
   INVENTORY_ADJUST: "inventory.adjust",
+
+  MEDIA_READ: "media.read",
+  MEDIA_CREATE: "media.create",
+  MEDIA_UPDATE: "media.update",
+  MEDIA_DELETE: "media.delete",
 
   CONTENT_READ: "content.read",
   CONTENT_CREATE: "content.create",
